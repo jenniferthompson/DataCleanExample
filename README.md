@@ -1,6 +1,6 @@
 # Data Cleaning Example
 
-This repo holds code demonstrating the ongoing process of data cleaning used by the [Vanderbilt CIBS Center](icudelirium.org). More details forthcoming.
+This repo holds code demonstrating the ongoing process of data cleaning used by the [Vanderbilt CIBS Center](www.icudelirium.org). More details forthcoming.
 
 The code refers to a sample [REDCap](projectredcap.org) database for a six-month longitudinal study of adult patients taking a dietary supplement and measuring creatinine, HDL and LDL cholesterol, and weight over time. (Sample database is adapted with thanks from REDCap's project templates.) The study codebook is included in this repo.
 
