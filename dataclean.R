@@ -2,7 +2,7 @@
 ## Data cleaning script for example REDCap project
 ################################################################################
 
-## -- Load or read in data -----------------------------------------------------
+## -- 1. Load or read in data --------------------------------------------------
 ## Load RCurl library, for interacting with REDCap API
 library(RCurl)
 
@@ -38,3 +38,8 @@ main_df <- read.csv(
   na.strings = "",
   stringsAsFactors = FALSE
 )
+
+## -- 2. Additional Setup ------------------------------------------------------
+## Source script of helper functions; keeping them separate -> cleaner code that
+## is easier to read/debug
+source("dataclean_helpers.R")
