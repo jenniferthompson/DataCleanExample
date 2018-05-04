@@ -53,7 +53,7 @@ get_label <- function(
 
 ## -- Helper function for all check_xxxxx() functions: -------------------------
 ## Takes as arguments:
-## - Matrix of 1/NA (problem/not), one column per issue
+## - Matrix of T/F or 1/0 (problem/not), one column per issue
 ## - data.frame of issue names (column 1) and error messages (column 2)
 ## Returns data.frame with one row per error and two columns:
 ## - id: "record ID;REDCap event name"
@@ -63,9 +63,9 @@ create_error_df <- function(
   error_matrix,
   error_codes
 ){
-  ## All values in error_matrix should be 1 or NA
-  if(!(all(is.na(error_matrix) | error_matrix == 1))){
-    stop("All values in `error_matrix` should be 1 or NA", call. = FALSE)
+  ## All values in error_matrix should be logical or 1/0
+  if(!(is.logical(error_matrix) | all(error_matrix %in% 0:1))){
+    stop("`error_matrix` should be logical or all 0/1", call. = FALSE)
   }
 
   ## error_codes should be a matrix or data.frame with two columns; all columns
@@ -78,7 +78,7 @@ create_error_df <- function(
   }
   if(!all(colnames(error_matrix) %in% error_codes[, 1])){
     stop(
-      "All columns in `error_matrix` should be represented by a row in `error_codes`",
+      "All columns in `error_matrix` must be represented by a row in `error_codes`",
       call. = FALSE
     )
   }
@@ -90,10 +90,10 @@ create_error_df <- function(
         1:ncol(error_matrix),
         FUN = function(i){
           data.frame(
-            id = rownames(error_matrix)[which(!is.na(error_matrix[, i]))],
+            id = rownames(error_matrix)[which(error_matrix[, i])],
             msg = rep(
               error_codes[match(colnames(error_matrix)[i], error_codes[, 1]), 2],
-              sum(error_matrix[, i], na.rm = TRUE)
+              sum(error_matrix[, i])
             )
           )
         }
@@ -124,7 +124,7 @@ check_missing <- function(df, variables, ddict = datadict){
     ## column names = variables, row names = ID + REDCap event
     missing_matrix <- do.call(
       cbind,
-      lapply(variables, FUN = function(x){ ifelse(is.na(df[,x]), 1, NA) })
+      lapply(variables, FUN = function(x){ is.na(df[,x]) })
     )
     colnames(missing_matrix) <- variables
     rownames(missing_matrix) <-
@@ -141,4 +141,157 @@ check_missing <- function(df, variables, ddict = datadict){
   }
 
   return(missing_data)
+}
+
+## -- Check whether numeric variables fall within specified limits -------------
+## If using a REDCap data dictionary, these can be the text_validation_min/max
+## fields; you can also specify your own limits that were not built into the
+## REDCap database design.
+## df_limits is a data.frame that has, at minimum, one column for the variable
+## name (column 1) and one column each for minimum and maximum values.
+## Everything in `variables` should be represented by a row in df_limits.
+
+check_limits_numeric <- function(
+  df,                                ## data.frame to check
+  variables,                         ## character vector of variables to check
+  ddict = datadict,                  ## data.frame containing variable labels
+  ## These defaults assume you are using a REDCap data dictionary, but you can
+  ## pass your own dataset too.
+  df_limits = datadict,              ## data.frame containing limits
+  cname_min = "text_validation_min", ## Column name for minimum limit
+  cname_max = "text_validation_max"  ## Column name for maximum limit
+){
+  ## Checks
+  if(!inherits(df, "data.frame")){
+    stop("`df` must be a data.frame", call. = FALSE)
+  }
+  if(!all(variables %in% names(df))){
+    stop("All elements of `variables` must be columns in `df`", call. = FALSE)
+  }
+  if(!inherits(df_limits, "data.frame") |
+     !all(c(cname_min, cname_max) %in% names(df_limits))){
+    stop("`df_limits` must be a data.frame with columns `cname_min`, `cname_max`",
+         call. = FALSE)
+  }
+  if(!all(variables %in% df_limits[, 1])){
+    stop(
+      "All elements of `variables` must be represented by a row in `df_limits`",
+      call. = FALSE
+    )
+  }
+  ## Warning if anything listed in `variables` is not a numeric field
+  not_numeric <- setdiff(
+    variables,
+    subset(datadict, text_validation_type_or_show_slider_number == "number")$field_name
+  )
+  variables <- setdiff(variables, not_numeric)
+
+  if(length(not_numeric) > 0){
+    warning(
+      sprintf(
+        "The following `variables` are not numeric: %s",
+        paste(not_numeric, collapse = "; ")
+      ),
+      call. = FALSE
+    )
+  }
+
+  if(nrow(df) > 0){
+    ## Create components for error messages in a data.frame:
+    error_codes <- data.frame(
+      variables = variables,
+      var_label = unlist(lapply(variables, FUN = get_label)),
+      min_value = unlist(lapply(
+        variables, FUN = function(x){
+          as.numeric(df_limits[df_limits[, 1] == x, cname_min])
+        }
+      )),
+      max_value = unlist(lapply(
+        variables, FUN = function(x){
+          as.numeric(df_limits[df_limits[, 1] == x, cname_max])
+        }
+      ))
+    )
+
+    ## If both min and max are missing, there are no limits to check
+    no_limits <-
+      subset(error_codes, is.na(min_value) & is.na(max_value))$variables
+    variables <- setdiff(variables, no_limits)
+
+    if(length(no_limits) > 0){
+      warning(
+        sprintf(
+          "The following `variables` have no limits in `df_limits`: %s",
+          paste(no_limits, collapse = "; ")
+        ),
+        call. = FALSE
+      )
+    }
+
+    error_codes <- subset(error_codes, !(variables %in% no_limits))
+
+    ## Combine pieces to create error messages
+    error_codes$msgs <- with(error_codes, {
+      ifelse(
+        !is.na(min_value) & !is.na(max_value),
+        sprintf(
+          "%s is not between recommended limits of %s and %s; please correct or confirm accuracy",
+          var_label, min_value, max_value
+        ),
+      ifelse(
+        !is.na(min_value),
+        sprintf(
+          "%s is lower than recommended limit of %s; please correct or confirm accuracy",
+          var_label, min_value
+        ),
+      ifelse(
+        !is.na(max_value),
+        sprintf(
+          "%s is higher than recommended limit of %s; please correct or confirm accuracy",
+          var_label, max_value
+        )
+      )))
+    })
+
+    ## Replace NA min/max with -/+Inf
+    error_codes$min_value <- with(error_codes, {
+      ifelse(is.na(min_value), -Inf, min_value)
+    })
+    error_codes$max_value <- with(error_codes, {
+      ifelse(is.na(max_value), Inf, max_value)
+    })
+
+    ## Matrix for whether each variable is outside limits:
+    ## column names = variables, row names = ID + REDCap event
+
+    ## Function to check values for one variable
+    outside_limits <- function(df, variable, min, max){
+      ifelse(is.na(df[, variable]), FALSE,
+             df[, variable] < min | df[, variable] > max)
+    }
+
+    ## Apply that function over all variables
+    limits_matrix <- mapply(
+      FUN = outside_limits,
+      variable = variables,
+      min = error_codes$min_value,
+      max = error_codes$max_value,
+      MoreArgs = list(df = df)
+    )
+    colnames(limits_matrix) <- variables
+    rownames(limits_matrix) <-
+      paste0(df[,"study_id"], ';', df[,"redcap_event_name"])
+
+    ## Create final data set: One row per column per missing value, with error
+    ## message that matches that column name
+    ## id = ID + REDCap event; msg = error message
+    limits_data <- create_error_df(
+      error_matrix = limits_matrix,
+      error_codes = subset(error_codes, select = c(variables, msgs))
+    )
+  } else{
+    limits_data <- NULL
+  }
+
+  return(limits_data)
 }
