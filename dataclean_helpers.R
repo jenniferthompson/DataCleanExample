@@ -2,7 +2,8 @@
 ## Helper functions for dataclean.R
 ################################################################################
 
-## -- Read in data dictionary; we will use this for variable labels ------------
+## -- Read in data dictionary --------------------------------------------------
+## -- We will use this for variable labels, limits -----------------------------
 library(RCurl)
 
 datadict_pF <- postForm(
@@ -20,11 +21,14 @@ datadict <- read.csv(
 
 ## -- Return a field label given the field name --------------------------------
 ## Data entry staff may not know what "sga_b" is, but they know what
-## "Subject Global Assessment" is. This function expects data dictionaries as
-## exported by REDCap defaults.
+## "Subject Global Assessment" is.
 get_label <- function(
-  variable,        ## character; must be in one row of ddict$field_name
-  ddict = datadict ## data.frame; expects columns field_name, field_label
+  variable,         ## character; must be in one row of ddict$field_name
+  ddict = datadict, ## data.frame
+  ## Default column names are based on REDCap data dictionary exports;
+  ## you can supply your own data.frame with your desired column names
+  cname_vname = "field_name", ## colname that contains variable ("sga_b")
+  cname_label = "field_label" ## colname that contains label ("Subj Global Asmt")
 ){
 
   ## Checks: ddict must be a data.frame with fields field_name and field_label,
@@ -32,10 +36,13 @@ get_label <- function(
   if(!inherits(ddict, "data.frame")){
     stop("'ddict' must be a data.frame", call. = FALSE)
   }
-  if(!all(c("field_name", "field_label") %in% names(ddict))){
-    stop("'ddict' must include columns: field_name, field_label", call. = FALSE)
+  if(!all(c(cname_vname, cname_label) %in% names(ddict))){
+    stop(
+      "Columns of 'ddict' must include `cname_vname`, `cname_label`",
+      call. = FALSE
+    )
   }
-  if(sum(ddict[, "field_name"] == variable, na.rm = TRUE) != 1){
+  if(sum(ddict[, cname_vname] == variable, na.rm = TRUE) != 1){
     stop(
       "'variable' must be represented in exactly one row in 'ddict'",
       call. = FALSE
@@ -43,7 +50,9 @@ get_label <- function(
   }
 
   ## With all those checks out of the way, getting the label is simple:
-  return(subset(datadict, field_name == variable)[["field_label"]])
+  return(
+    as.character(ddict[ddict[, cname_vname] == variable, cname_label])
+  )
 }
 
 ## -- Data checking functions --------------------------------------------------
