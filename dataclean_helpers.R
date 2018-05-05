@@ -4,17 +4,19 @@
 
 ## -- Read in data dictionary --------------------------------------------------
 ## -- We will use this for variable labels, limits -----------------------------
-library(RCurl)
+library(httr)
 
-datadict_pF <- postForm(
-    "https://redcap.vanderbilt.edu/api/", ## URL for REDCap instance
-    token = Sys.getenv("RCTOKEN"),        ## token for specific database
-    content = "metadata",                 ## export metadata
-    format = "csv"                        ## export as CSV
+ddict_post <- httr::POST(
+  url = "https://redcap.vanderbilt.edu/api/",
+  body = list(
+    token = Sys.getenv("RCTOKEN"), ## API token gives you permission to get data
+    content = "metadata",          ## export *metadata* (data dictionary)
+    format = "csv"                 ## export as *CSV*
   )
+)
 
 datadict <- read.csv(
-  file = textConnection(datadict_pF),
+  text = as.character(ddict_post),
   na.strings = "",
   stringsAsFactors = FALSE
 )
