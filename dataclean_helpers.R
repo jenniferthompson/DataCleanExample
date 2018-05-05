@@ -66,7 +66,7 @@ get_label <- function(
 ## - data.frame of issue names (column 1) and error messages (column 2)
 ## Returns data.frame with one row per error and two columns:
 ## - id: "record ID;REDCap event name"
-## - msg: error message
+## - msg: error message (eg, "Missing age", "Height lower than suggested limit")
 ## If no errors, returns a data.frame w/ 0 rows
 create_error_df <- function(
   error_matrix,
