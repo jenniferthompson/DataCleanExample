@@ -2,6 +2,22 @@
 ## Helper functions for dataclean.R
 ################################################################################
 
+## -- Helper function to create data.frames from `response` objects created ----
+## -- by httr::POST ------------------------------------------------------------
+post_to_df <- function(post_obj){
+  ## Use read.csv to create a data.frame from the response object
+  tmp <- read.csv(
+    text = as.character(post_obj),
+    stringsAsFactors = FALSE,
+    na.strings = ""
+  )
+
+  ## REDCap exports many underscores in checkbox variable names; cut down to 1
+  names(tmp) <- gsub("_+", "_", names(tmp))
+
+  return(tmp)
+}
+
 ## -- Read in data dictionary --------------------------------------------------
 ## -- We will use this for variable labels, limits -----------------------------
 library(httr)
