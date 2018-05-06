@@ -1,0 +1,197 @@
+---
+title: "R + REDCap Example Data Cleaning Workflow"
+author: "Jennifer Thompson, MPH"
+date: "June 4, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Summary and Goals
+
+This document demonstrates the ongoing process of data cleaning used by the [Vanderbilt CIBS Center](icudelirium.org). Most of our data is stored in
+[REDCap](projectredcap.org) databases and is cleaned at multiple points
+throughout data collection, with the goal of the highest quality data possible
+in the least amount of time once enrollment is complete. This example will
+demonstrate the R code we use to accomplish this goal, and briefly describe the
+rest of our process.
+
+# Notes
+
+- All code assumes that the user has rights to use the REDCap API for data export, and that a working API token is stored in the .Renviron file in the working directory, in the format
+
+    `RCTOKEN=manylettersandnumbers`
+
+    For more information on the REDCap API, please see `Project Setup -> Other Functionality` within an existing REDCap project. For general information on working with the API, the [Github wiki of the redcapAPI package](https://github.com/nutterb/redcapAPI/wiki) has a good overview. (This example includes basic API usage and will not use the package, but if you are interested in using more of the API's functionality, it would be a great one to investigate.)
+    
+- The code will use several helper functions, sourced from
+`dataclean_helpers.R` in this working directory/Github repository. If you are
+downloading this document, please make sure to download that script as well.
+
+# Motivating Example
+
+This example uses a sample REDCap database for a three-month longitudinal study
+of adult patients taking a dietary supplement and measuring creatinine, HDL and
+LDL cholesterol, and weight over time. (Sample database is adapted with thanks
+from REDCap's project templates.) The study codebook is available
+[here](https://github.com/jenniferthompson/DataCleanExample/blob/master/codebook.pdf).
+
+
+# Process Overview
+
+# Step 1: Use REDCap API to Export Data
+
+We use REDCap's API capabilities to export the data automatically every time the
+script is run, reducing the potential for error and saving time compared to
+manually exporting every time data is cleaned.
+
+## Requirements:
+
+### 1. Working API token
+
+You must have appropriate user rights for your database in order to request an
+API token. Once you have the correct user rights, log into the REDCap project.
+On the lefthand side under `Applications`, you will see a line for `API and API
+Playground`. Click here, then on the button titled `Generate API token`.
+
+![Getting an API token](images/redcap_api.png)
+
+Once your token is generated, **never share it with anyone**. It gives you permission and ability to access research data, and should be kept protected at
+all times. If you share code with other people, one way to do this safely is to
+store your API token in a hidden `.Renviron` file in the appropriate working
+directory, like this:
+
+`RCTOKEN=manylettersandnumbers`
+
+You can then access the token using the function `Sys.getenv()`.
+
+### 2. R's `httr` package, built for working with APIs
+
+More information on `httr` can be found in the documentation and vignettes,
+linked from [CRAN](https://cran.r-project.org/package=httr).
+
+## Approaches
+
+There are (at least) two approaches to exporting REDCap data:
+
+1. Read in the entire database in a single `httr::POST` call, then create subsets in R as needed
+1. Read in specific subsets in separate calls
+
+Approach #1 is fine if your database is not complex or very large, and/or if you are not yet comfortable working with the API. Approach #2 is valuable in more complicated situations.
+
+For example, here, our database is longitudinal, and different data is
+collected at different time points (for example, date of birth is only
+collected at baseline). If we read in the entire database at once, we will have
+a lot of missing values and extra columns.
+
+I will show an example of Approach 1 for reference, but will primarily use
+Approach 2. Either way, we want to create the following datasets:
+
+- Baseline data
+- Monthly data
+- Study completion data
+
+### Approach 1: Example
+
+This approach uses the simplest API call, but needs some R work after exporting
+the data.
+
+```{r readdata_1, eval = FALSE}
+## Load httr
+library(httr)
+
+## Source helper functions (script should be stored in this working directory)
+source("dataclean_helpers.R")
+
+## Set URL for REDCap instance (yours may be different)
+rc_url <- "https://redcap.vanderbilt.edu/api/"
+
+## Use API + httr::POST to get all data at once
+main_post <- httr::POST(
+  url = rc_url,
+  body = list(
+    token = Sys.getenv("RCTOKEN"),
+      ## API token gives you permission to get data
+    content = "record",        ## export *records*
+    format = "csv",            ## export as *CSV*
+    rawOrLabel = "label",      ## export factor *labels* vs numeric codes
+    exportCheckboxLabel = TRUE ## export ckbox *labels* vs Unchecked/Checked
+  )
+)
+
+## main_post has class "response"; read it as a CSV to create a data.frame
+main_df <- post_to_df(main_post)
+
+## Create subsets with data collected at various time points
+baseline_df <- subset(main_df, redcap_event_name == "Baseline Visit")
+monthly_df <- subset(main_df, redcap_event_name %in% paste("Month", 1:3))
+completion_df <- subset(main_df, redcap_event_name == "Study Completion")
+
+```
+
+### Approach 2
+
+This approach uses three separate `httr::POST` calls to create separate
+datasets that are exactly what we need.
+
+REDCap's API Playground can be useful in figuring out which options to include
+in the `body` argument of `httr::POST`. (Do note that as of the time of this writing, the example R code from the Playground uses `RCurl`; `httr` is
+currently more commonly used and thus it is easier to find documentation and
+assistance for it.)
+
+Differences from Approach 1 in the `body` of `httr::POST`:
+
+1. We specify **forms**, using their raw names (eg, `baseline_data` instead of `Baseline Data`). If you are exporting >1 form, separate them with commas.
+1. We specify **events**, again using their raw names (eg, `baseline_visit_arm_1` instead of `Baseline Visit`).
+1. We always specify `study_id` as a **field** in addition to the other forms. REDCap does not always export the ID by default.
+
+You can find raw event names by going to `Project Setup -> Define My Events`
+within your REDCap project, and raw form names by looking at the data
+dictionary. (They can also be exported as project metadata using the API.)
+
+**Note:** The function `post_to_df()`, which creates a data.frame from the
+result of `httr::POST`, is stored in `dataclean_helpers.R`.
+
+#### Baseline and Demographic Data
+
+This code chunk exports all the fields collected at the baseline visit (the
+Demographic and Baseline Visit forms), as well as study ID. It only exports the
+Baseline Visit event, because all other events will have `NA` values for these
+fields.
+
+```{r baseline_data}
+## Load httr
+library(httr)
+
+## Source helper functions (script should be stored in this working directory)
+source("dataclean_helpers.R")
+
+## Set URL for REDCap instance (yours may be different)
+rc_url <- "https://redcap.vanderbilt.edu/api/"
+
+## Data from baseline visit only: Demographics and Baseline Data forms
+bl_post <- httr::POST(
+  url = rc_url,
+  body = list(
+    token = Sys.getenv("RCTOKEN"), ## API token gives you permission
+    content = "record",            ## export *records*
+    format = "csv",                ## export as *CSV*
+    forms = "demographics,baseline_data", ## forms
+    fields = c("study_id"),               ## additional fields
+    events = "baseline_visit_arm_1",      ## baseline visit event only
+    rawOrLabel = "label",      ## export factor *labels* vs numeric codes
+    exportCheckboxLabel = TRUE ## export ckbox *labels* vs Unchecked/Checked
+  )
+)
+
+## bl_post has class "response"; read it as a CSV to create a data.frame
+bl_df <- post_to_df(bl_post)
+
+## Double-check if you like! Commented out to save space in PDF
+## bl_df
+
+```
+
+Beautiful! Keep going for the monthly and study completion forms.
