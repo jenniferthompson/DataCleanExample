@@ -3,13 +3,16 @@ title: "R + REDCap Example Data Cleaning Workflow"
 author: "Jennifer Thompson, MPH"
 date: "June 4, 2018"
 output: pdf_document
+documentclass: report
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Summary and Goals
+# Introduction
+
+## Summary and Goals
 
 This document demonstrates the ongoing process of data cleaning used by the [Vanderbilt CIBS Center](icudelirium.org). Most of our data is stored in
 [REDCap](projectredcap.org) databases and is cleaned at multiple points
@@ -18,7 +21,7 @@ in the least amount of time once enrollment is complete. This example will
 demonstrate the R code we use to accomplish this goal, and briefly describe the
 rest of our process.
 
-# Notes
+## Notes
 
 - All code assumes that the user has rights to use the REDCap API for data export, and that a working API token is stored in the .Renviron file in the working directory, in the format
 
@@ -30,7 +33,7 @@ rest of our process.
 `dataclean_helpers.R` in the same working directory/Github repository. The code
 will also be copied in an appendix to this document.
 
-# Motivating Example
+## Motivating Example
 
 This example uses a sample REDCap database for a three-month longitudinal study
 of adult patients taking a dietary supplement and measuring creatinine, HDL and
@@ -38,13 +41,14 @@ LDL cholesterol, and weight over time. (Sample database is adapted with thanks
 from REDCap's project templates.) The study codebook is available
 [here](https://github.com/jenniferthompson/DataCleanExample/blob/master/codebook.pdf).
 
+\tableofcontents
 
 # Process Overview
 
-# Step 1: Use REDCap API to Export Data
+# Step 1: Use REDCap API to Export Raw Data
 
-We use REDCap's API capabilities to export the data automatically every time the
-script is run, reducing the potential for error and saving time compared to
+We use REDCap's API capabilities to export the data automatically every time
+the script is run, reducing the potential for error and saving time compared to
 manually exporting every time data is cleaned.
 
 ## Requirements:
@@ -136,6 +140,12 @@ completion_df <- subset(main_df, redcap_event_name == "Study Completion")
 
 ```
 
+Note that unless we spend the time to manually subset them, each of those three
+data.frames will have many columns with blank values. For example,
+`baseline_df` will have a column for `compliance`, even though `compliance` is
+only collected at monthly visits. This is not a major problem if your project
+is small, but can be a problem if you have a large project.
+
 ### Approach 2
 
 This approach uses three separate `httr::POST` calls to create separate
@@ -148,22 +158,25 @@ assistance for it.)
 
 *(The `rawOrLabel = "label"` and `exportCheckboxLabel = TRUE` elements in the
 `body` argument of `POST` are personal preference. I set these to export labels
-because I find that more clear generally - ie, it is easier to figure out what
-`sex == Male` is doing than `sex == 1`. However, depending on your database and
-your purposes, you may want to change these to use the raw numeric codes.)*
+because I usually find that it is more clear - ie, it is easier to figure out
+what `sex == Male` is doing than `sex == 1`. However, depending on your
+database and your purposes, you may want to change these to use the raw numeric
+codes - for example, if you have fields with very long labels.)*
 
 Differences from Approach 1 in the `body` of `httr::POST`:
 
-1. We specify **forms**, using their raw names (eg, `baseline_data` instead of `Baseline Data`). If you are exporting >1 form, separate them with commas.
+1. We specify **forms**, using their raw names (eg, `baseline_data` instead of `Baseline Data`).
 1. We specify **events**, again using their raw names (eg, `baseline_visit_arm_1` instead of `Baseline Visit`).
 1. We always specify `study_id` as a **field** in addition to the other forms. REDCap does not always export the ID by default.
 
-You can find raw event names by going to `Project Setup -> Define My Events`
-within your REDCap project, and raw form names by looking at the data
-dictionary. (They can also be exported as project metadata using the API.)
+If you are exporting >1 form or event, separate them with commas. You can find
+raw event names by going to `Project Setup -> Define My Events` within your
+REDCap project, and raw form names by looking at the data dictionary. (They can
+also be exported as project metadata using the API; there is an example in
+`dataclean_helpers.R`.)
 
 **Note:** The function `post_to_df()`, which creates a data.frame from the
-result of `httr::POST`, is stored in `dataclean_helpers.R`.
+result of `httr::POST`, is created in `dataclean_helpers.R`.
 
 #### Baseline and Demographic Data
 
@@ -188,10 +201,10 @@ baseline_post <- httr::POST(
   )
 )
 
-## bl_post has class "response"; read it as a CSV to create a data.frame
+## baseline_post has class "response"; read it as a CSV to create a data.frame
 baseline_df <- post_to_df(baseline_post)
 
-## Double-check if you like! Commented out to save space in PDF
+## Double-check if you like! Commented out to save space
 ## baseline_df
 
 ```
@@ -222,7 +235,7 @@ monthly_post <- httr::POST(
 )
 monthly_df <- post_to_df(monthly_post)
 
-## Double-check if you like! Commented out to save space in PDF
+## Double-check if you like! Commented out to save space
 ## monthly_df
 
 ```
@@ -250,10 +263,133 @@ completion_post <- httr::POST(
 )
 completion_df <- post_to_df(completion_post)
 
-## Double-check if you like! Commented out to save space in PDF
+## Double-check if you like! Commented out to save space
 ## completion_df
 
 ```
+
+# Step 2: Download Resolved Queries
+
+Sometimes, issues with the data are known but cannot be resolved. For example,
+if a patient was not weighed at a monthly visit, that value can never be
+entered. Having it be brought up as a problem repeatedly forces study staff to
+re-investigate problems they have already investigated, which is both
+irritating and a waste of time and effort.
+
+Therefore, an important step in our process is the **documentation** of each
+issue. In addition to serving as a record of why the original data may have
+changed, this marks issues which cannot be resolved (or are confirmed correct,
+in the case of an extreme value) as unfixable or correct, and they are then
+able to be removed from future data cleans. We document these issues in a
+separate REDCap project, which contains at minimum the following fields:
+
+- Created by the data clean script:
+    - Unique identifier for every "query" (issue with the data)
+    
+        Typically a combination of patient ID, the date of the data clean, and a number between 1 and the total number of queries found during that data clean.
+    - Patient identifier (study ID)
+    - Date of data clean
+    - Form in the data entry database where the problem is located *(eg, Monthly Visit)*
+    - Event in the data entry database where the problem is located *(eg, Monthly Visit 2)*
+    - Text describing the problem *(eg, "Sex is Male, but patient is marked as pregnant")*
+- Fields filled out by study staff:
+    - Was the issue corrected? Options:
+        - No
+        - Yes
+        - Value confirmed correct
+          *(for accuracy queries only - eg, "weight really was xxxx kg")*
+    - If the issue was not corrected, why?
+    - Electronic signature for the person who corrected the issue
+- Fields filled out by the coordinating center/staff member in charge:
+    - Date query was reviewed by coordinating center
+    - Was the issue closed? Options:
+        - Yes, it is permanently unfixable *(eg, patient was never weighed)*
+        - Yes, the query was the result of a programming error or miscommunication
+        - No (project manager should contact site to reconcile)
+    - Electronic signature field for coordinating center member who reviewed query
+
+Depending on the study, it might also be helpful to have additional fields,
+such as whether a Note to File was recorded.
+
+The example documentation codebook for this project can be found [here](https://github.com/jenniferthompson/DataCleanExample/blob/master/codebook_documentation.pdf).
+
+We download the data in our documentation database in the same way as the raw
+data. However, note that since it is a separate REDCap project, you will need a
+separate API token. Mine is saved in my `.Renviron` file as the object
+`DOCTOKEN`.
+
+```{r already_checked}
+## Documentation of queries already checked
+doc_post <- httr::POST(
+  url = rc_url,
+  body = list(
+    token = Sys.getenv("DOCTOKEN"),
+    content = "record",
+    format = "csv",
+    rawOrLabel = "label",
+    exportCheckboxLabel = TRUE
+  )
+)
+## This won't work till I enter some data!
+# doc_df <- post_to_df(doc_post)
+
+## Double-check if you like! Commented out to save space
+## doc_df
+
+```
+
+# Step 3: Create a data.frame of All Issues
+
+# Step 4: Remove Unfixable Queries
+
+# Step 5: Disseminate Issues to Study Staff
+
+# Step 6: Iterate!
+
+I mean iteration in two ways.
+
+## Repeat This Process, Early and Often
+
+The more frequently you clean your data, the more prepared you will be for
+things like interim analyses and DSMB or progress reports, and the less time
+you'll have to spend at the end of the study (when everyone is very excited
+about getting the final results!). This is especially important for multicenter
+studies or studies that enroll over years, where sites or staff members may
+join and leave the group; once a site is closed or a coordinator has retired,
+it is (understandably!) a challenge to get effort from that site to clean data.
+Besides, no one wants to get a large, overwhelming number of queries at the
+end of the study!
+
+How frequently you choose to clean your data will depend on enrollment rates
+and how many staff members are available to do the cleaning, but we recommend
+repeating this process as often as is reasonable.
+
+## Always Be Improving
+
+Much like your study protocols, your cleaning script will rarely be perfect on
+the first try. As the study goes on, you will always find more ways that data
+can be "wrong," or have more questions that are inspired by unexpected data or
+discussions with study staff. The vast majority of time spent on this data
+cleaning script is during its initial development, but there will always be
+things that need to be changed or added.
+
+This is one reason that **communication** between the statistician/database
+manager and study staff is hugely important! We work together not only at the
+beginning of this process, to design the database and come up with lists of
+data points that need to be checked, but throughout study enrollment and data
+collection to make sure that protocol changes are adequately accounted for,
+misunderstandings are cleared up quickly, etc. Typically, as study staff are
+working through one round of data cleaning, I keep a list of things that need
+to be investigated - queries they believe shouldn't be there or aren't clear,
+queries that need to be added due to a protocol change, etc. Then when it's
+time for the next round of data cleaning, I block off some time to investigate
+anything that has come up, fix or add what needs attention, and *then* rerun
+the next round.
+
+In addition to improving the data itself and the data cleaning script, we use
+this process as a way to improve our study documents and staff education: If
+there is a piece of data that is systematically showing up as an issue, perhaps it is due to something that was not clearly addressed at the study startup
+visit and needs to be revisited, or should be written out fully in an SOP.
 
 \newpage
 
