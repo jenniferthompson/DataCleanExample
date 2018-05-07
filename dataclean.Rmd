@@ -27,8 +27,8 @@ rest of our process.
     For more information on the REDCap API, please see `Project Setup -> Other Functionality` within an existing REDCap project. For general information on working with the API, the [Github wiki of the redcapAPI package](https://github.com/nutterb/redcapAPI/wiki) has a good overview. (This example includes basic API usage and will not use the package, but if you are interested in using more of the API's functionality, it would be a great one to investigate.)
     
 - The code will use several helper functions, sourced from
-`dataclean_helpers.R` in this working directory/Github repository. If you are
-downloading this document, please make sure to download that script as well.
+`dataclean_helpers.R` in the same working directory/Github repository. The code
+will also be copied in an appendix to this document.
 
 # Motivating Example
 
@@ -93,12 +93,9 @@ Approach 2. Either way, we want to create the following datasets:
 - Monthly data
 - Study completion data
 
-### Approach 1: Example
+For both approaches, we need this setup:
 
-This approach uses the simplest API call, but needs some R work after exporting
-the data.
-
-```{r readdata_1, eval = FALSE}
+```{r httr_setup}
 ## Load httr
 library(httr)
 
@@ -108,6 +105,14 @@ source("dataclean_helpers.R")
 ## Set URL for REDCap instance (yours may be different)
 rc_url <- "https://redcap.vanderbilt.edu/api/"
 
+```
+
+### Approach 1: Example
+
+This approach uses the simplest API call, but needs some R work after exporting
+the data.
+
+```{r readdata_1, eval = FALSE}
 ## Use API + httr::POST to get all data at once
 main_post <- httr::POST(
   url = rc_url,
@@ -141,6 +146,12 @@ in the `body` argument of `httr::POST`. (Do note that as of the time of this wri
 currently more commonly used and thus it is easier to find documentation and
 assistance for it.)
 
+*(The `rawOrLabel = "label"` and `exportCheckboxLabel = TRUE` elements in the
+`body` argument of `POST` are personal preference. I set these to export labels
+because I find that more clear generally - ie, it is easier to figure out what
+`sex == Male` is doing than `sex == 1`. However, depending on your database and
+your purposes, you may want to change these to use the raw numeric codes.)*
+
 Differences from Approach 1 in the `body` of `httr::POST`:
 
 1. We specify **forms**, using their raw names (eg, `baseline_data` instead of `Baseline Data`). If you are exporting >1 form, separate them with commas.
@@ -158,21 +169,12 @@ result of `httr::POST`, is stored in `dataclean_helpers.R`.
 
 This code chunk exports all the fields collected at the baseline visit (the
 Demographic and Baseline Visit forms), as well as study ID. It only exports the
-Baseline Visit event, because all other events will have `NA` values for these
-fields.
+Baseline Visit event, because all other events would have `NA` values for these
+fields. Therefore, each study ID will have at most one record in this dataset.
 
 ```{r baseline_data}
-## Load httr
-library(httr)
-
-## Source helper functions (script should be stored in this working directory)
-source("dataclean_helpers.R")
-
-## Set URL for REDCap instance (yours may be different)
-rc_url <- "https://redcap.vanderbilt.edu/api/"
-
 ## Data from baseline visit only: Demographics and Baseline Data forms
-bl_post <- httr::POST(
+baseline_post <- httr::POST(
   url = rc_url,
   body = list(
     token = Sys.getenv("RCTOKEN"), ## API token gives you permission
@@ -187,11 +189,79 @@ bl_post <- httr::POST(
 )
 
 ## bl_post has class "response"; read it as a CSV to create a data.frame
-bl_df <- post_to_df(bl_post)
+baseline_df <- post_to_df(baseline_post)
 
 ## Double-check if you like! Commented out to save space in PDF
-## bl_df
+## baseline_df
 
 ```
 
 Beautiful! Keep going for the monthly and study completion forms.
+
+#### Monthly Visit Data
+
+This code chunk exports all the fields collected at each monthly visit (the
+Monthly Visit form), as well as study ID. It exports all three monthly visit events; all other events will have `NA` values for these fields. Each study ID
+will have up to three records in this dataset.
+
+```{r monthly_data}
+## Data from all monthly visits
+monthly_post <- httr::POST(
+  url = rc_url,
+  body = list(
+    token = Sys.getenv("RCTOKEN"),           ## API token gives you permission
+    content = "record",                      ## export *records*
+    format = "csv",                          ## export as *CSV*
+    forms = "monthly_data",                  ## forms
+    fields = c("study_id"),                  ## additional fields
+    events = paste(sprintf("month_%s_arm_1", 1:3), collapse = ","),
+      ## all 3 monthly visit events
+    rawOrLabel = "label",      ## export factor *labels* vs numeric codes
+    exportCheckboxLabel = TRUE ## export ckbox *labels* vs Unchecked/Checked
+  )
+)
+monthly_df <- post_to_df(monthly_post)
+
+## Double-check if you like! Commented out to save space in PDF
+## monthly_df
+
+```
+
+#### Study Completion Data
+
+This code chunk exports all the fields collected at study completion, as well
+as study ID. It exports only the study completion event; therefore, each study
+ID will have at most one record.
+
+```{r completion_data}
+## Data from study completion visits
+completion_post <- httr::POST(
+  url = rc_url,
+  body = list(
+    token = Sys.getenv("RCTOKEN"),     ## API token gives you permission
+    content = "record",                ## export *records*
+    format = "csv",                    ## export as *CSV*
+    forms = "completion_data",         ## form
+    fields = c("study_id"),            ## additional fields
+    events = "study_completion_arm_1", ## study completion event
+    rawOrLabel = "label",      ## export factor *labels* vs numeric codes
+    exportCheckboxLabel = TRUE ## export ckbox *labels* vs Unchecked/Checked
+  )
+)
+completion_df <- post_to_df(completion_post)
+
+## Double-check if you like! Commented out to save space in PDF
+## completion_df
+
+```
+
+\newpage
+
+# Appendix: `dataclean_helpers.R`
+
+This file contains several "helper functions" which make the processes of
+downloading data and checking problems of similar types easier to do and debug. When using the workflow described here, this file should be stored in the same
+working directory and sourced within the script, as seen above. It is copied here for convenience.
+
+```{r, code = readLines("dataclean_helpers.R")}
+```
