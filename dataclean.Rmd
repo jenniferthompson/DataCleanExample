@@ -268,50 +268,66 @@ completion_df <- post_to_df(completion_post)
 
 ```
 
-# Step 2: Download Resolved Queries
+# Step 2: Create a data.frame of All Issues
+
+# Step 3: Remove Unfixable Queries
 
 Sometimes, issues with the data are known but cannot be resolved. For example,
 if a patient was not weighed at a monthly visit, that value can never be
-entered. Having it be brought up as a problem repeatedly forces study staff to
-re-investigate problems they have already investigated, which is both
-irritating and a waste of time and effort.
+entered. Repeating these queries forces study staff to re-investigate problems
+they have already documented, which is both irritating and a waste of time and effort.
 
 Therefore, an important step in our process is the **documentation** of each
-issue. In addition to serving as a record of why the original data may have
-changed, this marks issues which cannot be resolved (or are confirmed correct,
-in the case of an extreme value) as unfixable or correct, and they are then
-able to be removed from future data cleans. We document these issues in a
-separate REDCap project, which contains at minimum the following fields:
+issue. This both serves as a record of why the original data changed and
+enables us to **remove** issues which are unfixable or correct from future
+data cleans.
 
-- Created by the data clean script:
-    - Unique identifier for every "query" (issue with the data)
-    
-        Typically a combination of patient ID, the date of the data clean, and a number between 1 and the total number of queries found during that data clean.
-    - Patient identifier (study ID)
-    - Date of data clean
-    - Form in the data entry database where the problem is located *(eg, Monthly Visit)*
-    - Event in the data entry database where the problem is located *(eg, Monthly Visit 2)*
-    - Text describing the problem *(eg, "Sex is Male, but patient is marked as pregnant")*
-- Fields filled out by study staff:
-    - Was the issue corrected? Options:
-        - No
-        - Yes
-        - Value confirmed correct
-          *(for accuracy queries only - eg, "weight really was xxxx kg")*
-    - If the issue was not corrected, why?
-    - Electronic signature for the person who corrected the issue
-- Fields filled out by the coordinating center/staff member in charge:
-    - Date query was reviewed by coordinating center
-    - Was the issue closed? Options:
-        - Yes, it is permanently unfixable *(eg, patient was never weighed)*
-        - Yes, the query was the result of a programming error or miscommunication
-        - No (project manager should contact site to reconcile)
-    - Electronic signature field for coordinating center member who reviewed query
+## Documentation Project Structure
+
+We document all issues and record their resolution in a separate REDCap
+project, which contains at minimum the following fields (example values in
+blue):
+
+### Values created by R script
+
+\begin{center}
+  \includegraphics{images/doc_script.png}
+\end{center}
+
+`Query ID` is typically a combination of patient ID, the date of the data clean, and a number between 1 and the total number of queries found during that data clean.
+
+### Values filled out by study staff
+
+\begin{center}
+  \includegraphics{images/doc_site.png}
+\end{center}
+
+"Accuracy queries" are those that ask staff to confirm extreme values - for example, "Height is less than recommended minimum of xxx cm; please correct or confirm."
+
+### Values filled out by coordinating center/manager
+
+\begin{center}
+  \includegraphics{images/doc_cc.png}
+\end{center}
+
+"Permanently unfixable" queries are those that relate to data that can never be
+recovered; for example, weight is missing at a monthly assessment because the
+patient wasn't weighed at all.
+
+Some queries are due to errors in the script or miscommunications between the
+coordinating center and the statistician/database manager; as the study
+progresses, you will always find new, fun problems! Thus, we allow for this
+category of "not fixed."
 
 Depending on the study, it might also be helpful to have additional fields,
-such as whether a Note to File was recorded.
+such as a reason the query was not corrected or whether a Note to File was
+recorded.
 
 The example documentation codebook for this project can be found [here](https://github.com/jenniferthompson/DataCleanExample/blob/master/codebook_documentation.pdf).
+
+\newpage
+
+## Exporting Documentation Data
 
 We download the data in our documentation database in the same way as the raw
 data. However, note that since it is a separate REDCap project, you will need a
@@ -338,13 +354,9 @@ doc_post <- httr::POST(
 
 ```
 
-# Step 3: Create a data.frame of All Issues
+# Step 4: Disseminate Issues to Study Staff
 
-# Step 4: Remove Unfixable Queries
-
-# Step 5: Disseminate Issues to Study Staff
-
-# Step 6: Iterate!
+# Step 5: Iterate!
 
 I mean iteration in two ways.
 
@@ -391,13 +403,13 @@ this process as a way to improve our study documents and staff education: If
 there is a piece of data that is systematically showing up as an issue, perhaps it is due to something that was not clearly addressed at the study startup
 visit and needs to be revisited, or should be written out fully in an SOP.
 
-\newpage
+<!-- \newpage -->
 
-# Appendix: `dataclean_helpers.R`
+<!-- # Appendix: `dataclean_helpers.R` -->
 
-This file contains several "helper functions" which make the processes of
-downloading data and checking problems of similar types easier to do and debug. When using the workflow described here, this file should be stored in the same
-working directory and sourced within the script, as seen above. It is copied here for convenience.
+<!-- This file contains several "helper functions" which make the processes of -->
+<!-- downloading data and checking problems of similar types easier to do and debug. When using the workflow described here, this file should be stored in the same -->
+<!-- working directory and sourced within the script, as seen above. It is copied here for convenience. -->
 
-```{r, code = readLines("dataclean_helpers.R")}
-```
+<!-- ```{r, code = readLines("dataclean_helpers.R")} -->
+<!-- ``` -->
