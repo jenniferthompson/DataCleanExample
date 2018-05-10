@@ -33,6 +33,11 @@ rest of our process.
 `dataclean_helpers.R` in the same working directory/Github repository. The code
 will also be copied in an appendix to this document.
 
+- This script intentionally sticks to base R with very few exceptions, to
+maximize adoption and minimize dependencies. Should you care to refactor with
+the [tidyverse](tidyverse.org) or other packages, alternate versions are
+welcome!
+
 ## Motivating Example
 
 This example uses a sample REDCap database for a three-month longitudinal study
@@ -88,7 +93,8 @@ Approach #1 is fine if your database is not complex or very large, and/or if you
 For example, here, our database is longitudinal, and different data is
 collected at different time points (for example, date of birth is only
 collected at baseline). If we read in the entire database at once, we will have
-a lot of missing values and extra columns.
+a lot of missing values (for example, date of birth will be missing at each
+monthly visit and study completion, unless we proactively subset the data).
 
 I will show an example of Approach 1 for reference, but will primarily use
 Approach 2. Either way, we want to create the following datasets:
@@ -269,6 +275,98 @@ completion_df <- post_to_df(completion_post)
 ```
 
 # Step 2: Create a data.frame of All Issues
+
+This sounds deceptively straightforward, but is the most involved part of this
+process. Our goal is to create a single data frame of all potential problems in
+our REDCap project as of the date we run the script, which can then be imported
+into our documentation database(s) (more on that later) so that the issues can
+be resolved.
+
+## Workflow
+
+Typically, I work form by form: here, we'll clean the entire demographic form,
+then the entire baseline data collection form, then... This keeps the code in
+manageable chunks and makes it easier to both write initially and debug and
+maintain as the study progresses.
+
+We often have groups of very similar potential problems: There are many fields that should be present no matter what, for example, and there are several
+fields which should be between specific limits. We can write custom functions
+to check these types of issues.
+
+One note: REDCap has many data validation capabilities built in - **use them!**
+If your database already checks fields like email for formatting, or gives live
+warning if you enter unlikely lab values, it will save you and the study staff
+time and headaches later. The same applies to using branching logic often and
+well. The added value for this data cleaning script comes from the more complex
+data checks that are possible here and not within REDCap itself. But the more
+of REDCap's powerful features you can use from the beginning, the better your
+data will be throughout the study.
+
+## Demographics Form
+
+The Demographics form is one of the two collected at the baseline visit. In Step 1, we exported it as part of `baseline_df`; this data.frame has one record
+per patient. This is important because it will keep us from finding many
+missing fields where, in actuality, no data should be.
+
+### 1. Decide what to clean
+
+The first step is to determine what issues need to be looked for. Some of these
+are straightforward: for example, every patient should have a date of birth.
+Some are more complex or not as obvious, however. **This is where communication
+and detail are key.** Typically, our project manager will spend a good deal of
+time creating a list of things that need to be checked, based on the study
+protocols and goals. It is enormously important for the clinical data team and
+the statistician/database manager to overcommunicate at this stage!
+
+For our demographics form, we want to check the following:
+
+- Study ID should always be an integer (no letters or special characters)
+- These fields should always be present:
+    - Date of consent
+    - Consent form
+    - All contact information
+    - Phone
+    - Mood
+    - Statins
+- Postal code should be properly formatted *(so should email, but REDCap will validate this field automatically - take advantage of REDCap's capabilities when designing your study!)*
+- Date of birth should be between 18 and 110 years before consent
+- If the patient is female, whether she has ever given birth should be entered
+- If the patient has given birth, the number of births should be entered
+- If no activity questions are marked, study staff should confirm this (it might be OK, but it is unusual and should be checked)
+- If the patient is marked as being on statins, at least one specific statin
+should be checked; if the patient is marked as *not* being on statins, *no*
+statins should be checked
+- Height and weight should both be present and within soft limits set in the database
+
+Our first step is to create a `data.frame` where one column is an error code,
+and the second column is the corresponding error message. For example, our
+error code might be `id_format`, and the corresponding error message might be
+`Study ID should be an integer with at most four digits`.
+
+```{r demog_codes}
+## -- Create error codes + corresponding messages for all issues *except* ------
+## -- fields that are simply missing or should fall within specified limits ----
+
+## Codes: Short, like variable names
+## Messages: As clear as possible to the human reader
+demog_codes <- data.frame(
+  code = c(
+    "id_format", "postcode_format", "dob_limits", "birth_yn", "birth_num",
+    "no_activity", "which_statin", "no_statins"
+  ),
+  msg = c(
+    "Study ID should be an integer with at most four digits",
+    "Postal code should be formatted properly",
+    "Date of birth should be within 18 and 110 years prior to consent",
+    "If patient is female, whether she has given birth should be marked",
+    "If patient has given birth, number of births should be present",
+    "This patient has no activities marked; please confirm or correct",
+    "Patient is marked as taking statins, but no specific statins checked",
+    "Patient is marked as not taking statins, but at least one statin is checked"
+  )
+)
+
+```
 
 # Step 3: Remove Unfixable Queries
 
