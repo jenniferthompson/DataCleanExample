@@ -338,10 +338,26 @@ should be checked; if the patient is marked as *not* being on statins, *no*
 statins should be checked
 - Height and weight should both be present and within soft limits set in the database
 
-Our first step is to create a `data.frame` where one column is an error code,
-and the second column is the corresponding error message. For example, our
-error code might be `id_format`, and the corresponding error message might be
-`Study ID should be an integer with at most four digits`.
+### 2. Setup
+
+We need to do a bit of data management: We need dates of birth and consent to be
+`Date` formats so that we can compare them.
+
+```{r demog_datamgmt}
+baseline_df$dob <- as.Date(baseline_df$dob, format = "%Y-%m-%d")
+baseline_df$date_enrolled <- as.Date(
+  baseline_df$date_enrolled, format = "%Y-%m-%d"
+)
+
+```
+
+### 3. Custom error checking (+ demo of the process)
+
+Our next step is to create a `n x 2` data.frame where each row represents one
+potential problem; the first column is an error code; and the second column is
+the corresponding error message. For example, our error code might be
+`id_format`, and the corresponding error message might be `Study ID should be an
+integer with at most four digits`.
 
 ```{r demog_codes}
 ## -- Create error codes + corresponding messages for all issues *except* ------
@@ -367,6 +383,159 @@ demog_codes <- data.frame(
 )
 
 ```
+
+The second step is to create a matrix with # rows = `nrow(data frame we're checking)`, and # columns = `nrow(data frame of error codes)`. Every column is
+logical, indicating whether or not this problem exists at this row in the data.frame. For many issues, we'll do this manually.
+
+```{r demog_setup}
+## Preliminary setup: Create empty matrix to hold all potential issues
+## Rows = # rows in baseline_df
+## Columns = # potential issues
+## Everything starts off FALSE
+demog_issues <- matrix(FALSE, ncol = nrow(demog_codes), nrow = nrow(baseline_df))
+colnames(demog_issues) <- demog_codes$code
+rownames(demog_issues) <- paste(
+  baseline_df$study_id, "Baseline Visit", sep = '; '
+)
+
+```
+
+Note that our matrix has specific `rownames` - this will be important later,
+especially for longitudinal forms. The rownames are formatted as `study_id; event_name`. Later, we'll separate these rownames into the ID and event fields
+to upload to the documentation database.
+
+```{r demog_issues}
+## -- Determine true/false for each potential issue ----------------------------
+## Study ID, postal codes are checked using regular expressions; set rows which
+## do *not* meet the regex to TRUE
+demog_issues[
+  grep("^\\d{1,4}$", baseline_df$study_id, invert = TRUE), "id_format"
+  ] <- TRUE
+demog_issues[
+  grep("^\\d{3}-\\d{4}$", baseline_df$postal_code, invert = TRUE),
+  "postcode_format"
+  ] <- TRUE
+
+## Date of birth: Should be within 18 and 110 years of consent date
+demog_issues[
+  with(baseline_df, {
+    difftime(date_enrolled, dob, units = "days") < (18 * 365.25) |
+      difftime(date_enrolled, dob, units = "days") > (110 * 365.25)
+  }),
+  "dob_limits"
+] <- TRUE
+
+## Birth questions
+demog_issues[
+  with(baseline_df, !is.na(gender) & gender == "Female" & is.na(given_birth)),
+  "birth_yn"
+] <- TRUE
+demog_issues[
+  with(baseline_df, {
+    !is.na(given_birth) & given_birth == "Yes" & is.na(num_children)
+  }),
+  "birth_num"
+] <- TRUE
+
+## Activity questions: If all are missing, ask site to confirm
+demog_issues[
+  rowSums(
+    !is.na(
+      baseline_df[
+        ,
+        grep("^(gym|aerobics|eat|drink)\\_[0-6]$", names(baseline_df))
+        ]
+    )
+  ) == 0,
+  "no_activity"
+  ] <- TRUE
+
+## Statins
+demog_issues[
+  baseline_df$any_statins == "Yes" &
+    rowSums(!is.na(baseline_df[, paste0("which_statins_", 1:9)])) == 0,
+  "which_statin"
+] <- TRUE
+demog_issues[
+  baseline_df$any_statins == "No" &
+    rowSums(!is.na(baseline_df[, paste0("which_statins_", 1:9)])) > 0,
+  "no_statins"
+] <- TRUE
+
+demog_issues
+
+```
+
+Success! The next step is to take our matrix, look for only the actual errors
+(`TRUE` values), and combine them into a data.frame with one row per actual
+error. To do this, we create a data.frame for every column in `demog_issues`
+with one row per `TRUE` value, then bind all those rows together.
+
+Because we'll be doing this frequently, there is a helper function,
+`create_error_df()`, in `dataclean_helpers.R` to do it for us. The function
+takes as inputs our `error_codes` and `error_matrix`, and returns a data.frame
+with one row per actual problem.
+
+```{r demog_df}
+demog_errors <- create_error_df(
+  error_matrix = demog_issues, error_codes = demog_codes
+)
+
+demog_errors
+
+```
+
+
+
+### 4. Simple checks: Are these fields present?
+
+One of the most common issues we check is simply whether every record has a
+certain field that should always be present. For example, in our Demographics
+form, every patient should have date of birth and gender, among other fields.
+
+Because these checks are so common, I have a helper function, `check_missing()`,
+that lets us do it easily. It follows the same basic steps as we did for our
+custom checks, but every check is `is.na(df[, x])`, and every error message is
+"Missing [field label]." It takes as inputs our data.frame, a character string
+of variables to check, and the data dictionary, from which it gets variable
+labels to create the full error message.
+
+(Variable labels can be very helpful in error messages! No matter how descriptive your field names are, your data entry team is used to seeing "Subject Global
+Assessment," not "sga_b". With little effort, you can make their lives much
+easier and also make the data cleaning process much faster. Here, the data
+dictonary is imported in `dataclean_helpers.R`, using a process similar to the
+one we used to download our raw data, and stored as the object `datadict`.)
+
+```{r demog_missing}
+demog_missing <- check_missing(
+  df = baseline_df,
+  variables = c(
+    "date_enrolled", "patient_document", "family_name", "given_name",
+    "street_address", "city_prefecture", "postal_code", "phone", "email",
+    "dob", "gender", "mood", "any_statins", "height", "weight", "bmi"
+  ),
+  ddict = datadict
+)
+
+demog_missing
+
+```
+
+Perfect. That's all we want to check for the Demographics form, so we'll combine
+those two data.frames into a single one for ease.
+
+```{r demog_combine}
+demog_final <- do.call(rbind, list(demog_missing, demog_errors))
+
+```
+
+
+
+
+
+
+
+
 
 # Step 3: Remove Unfixable Queries
 
