@@ -2,6 +2,8 @@
 ## Helper functions for dataclean.R
 ################################################################################
 
+library(httr) ## for working with REDCap API
+
 ## -- Helper function to create data.frames from `response` objects created ----
 ## -- by httr::POST ------------------------------------------------------------
 post_to_df <- function(post_obj){
@@ -20,8 +22,6 @@ post_to_df <- function(post_obj){
 
 ## -- Read in data dictionary --------------------------------------------------
 ## -- We will use this for variable labels, limits -----------------------------
-library(httr)
-
 ddict_post <- httr::POST(
   url = "https://redcap.vanderbilt.edu/api/",
   body = list(
@@ -31,11 +31,7 @@ ddict_post <- httr::POST(
   )
 )
 
-datadict <- read.csv(
-  text = as.character(ddict_post),
-  na.strings = "",
-  stringsAsFactors = FALSE
-)
+datadict <- post_to_df(ddict_post)
 
 ## -- Return a field label given the field name --------------------------------
 ## Data entry staff may not know what "sga_b" is, but they know what
@@ -99,7 +95,7 @@ create_error_df <- function(
   ## in error_matrix should be represented in error_codes[, 1]
   if(ncol(error_codes) != 2){
     stop(
-      "`error_codes` should have two columns: `variables` and `msgs`",
+      "`error_codes` should have two columns: `code` and `msg`",
       call. = FALSE
     )
   }
@@ -145,7 +141,8 @@ check_missing <- function(df, variables, ddict = datadict){
     )
 
     ## Create data frame of column names, error messages
-    error_codes <- as.data.frame(cbind(variables, missing_msgs))
+    error_codes <- as.data.frame(cbind(paste0("miss_", variables), missing_msgs))
+    names(error_codes) <- c("code", "msg")
 
     ## Matrix for whether each variable is missing:
     ## column names = variables, row names = ID + REDCap event
@@ -153,9 +150,9 @@ check_missing <- function(df, variables, ddict = datadict){
       cbind,
       lapply(variables, FUN = function(x){ is.na(df[,x]) })
     )
-    colnames(missing_matrix) <- variables
+    colnames(missing_matrix) <- paste0("miss_", variables)
     rownames(missing_matrix) <-
-      paste0(df[,"study_id"], ';', df[,"redcap_event_name"])
+      paste0(df[,"study_id"], "; ", df[,"redcap_event_name"])
 
     ## Create final data set: One row per column per missing value, with error
     ## message that matches that column name
@@ -225,7 +222,7 @@ check_limits_numeric <- function(
 
   if(nrow(df) > 0){
     ## Create components for error messages in a data.frame:
-    error_codes <- data.frame(
+    limits_codes <- data.frame(
       variables = variables,
       var_label = unlist(lapply(variables, FUN = get_label)),
       min_value = unlist(lapply(
@@ -242,7 +239,7 @@ check_limits_numeric <- function(
 
     ## If both min and max are missing, there are no limits to check
     no_limits <-
-      subset(error_codes, is.na(min_value) & is.na(max_value))$variables
+      subset(limits_codes, is.na(min_value) & is.na(max_value))$variables
     variables <- setdiff(variables, no_limits)
 
     if(length(no_limits) > 0){
@@ -255,10 +252,10 @@ check_limits_numeric <- function(
       )
     }
 
-    error_codes <- subset(error_codes, !(variables %in% no_limits))
+    limits_codes <- subset(limits_codes, !(variables %in% no_limits))
 
     ## Combine pieces to create error messages
-    error_codes$msgs <- with(error_codes, {
+    limits_codes$msg <- with(limits_codes, {
       ifelse(
         !is.na(min_value) & !is.na(max_value),
         sprintf(
@@ -281,10 +278,10 @@ check_limits_numeric <- function(
     })
 
     ## Replace NA min/max with -/+Inf
-    error_codes$min_value <- with(error_codes, {
+    limits_codes$min_value <- with(limits_codes, {
       ifelse(is.na(min_value), -Inf, min_value)
     })
-    error_codes$max_value <- with(error_codes, {
+    limits_codes$max_value <- with(limits_codes, {
       ifelse(is.na(max_value), Inf, max_value)
     })
 
@@ -301,20 +298,23 @@ check_limits_numeric <- function(
     limits_matrix <- mapply(
       FUN = outside_limits,
       variable = variables,
-      min = error_codes$min_value,
-      max = error_codes$max_value,
+      min = limits_codes$min_value,
+      max = limits_codes$max_value,
       MoreArgs = list(df = df)
     )
     colnames(limits_matrix) <- variables
     rownames(limits_matrix) <-
-      paste0(df[,"study_id"], ';', df[,"redcap_event_name"])
+      paste0(df[,"study_id"], "; ", df[,"redcap_event_name"])
 
     ## Create final data set: One row per column per missing value, with error
     ## message that matches that column name
     ## id = ID + REDCap event; msg = error message
+    limits_codes <- subset(limits_codes, select = c(variables, msg))
+    names(limits_codes) <- c("code", "msg")
+
     limits_data <- create_error_df(
       error_matrix = limits_matrix,
-      error_codes = subset(error_codes, select = c(variables, msgs))
+      error_codes = limits_codes
     )
   } else{
     limits_data <- NULL
