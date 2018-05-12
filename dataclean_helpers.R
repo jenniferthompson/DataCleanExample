@@ -110,8 +110,10 @@ create_error_df <- function(
     do.call(
       rbind,
       lapply(
+        ## For every column of error_matrix...
         1:ncol(error_matrix),
         FUN = function(i){
+          ## Create a data.frame with all actual error messages within the col
           data.frame(
             id = rownames(error_matrix)[which(error_matrix[, i])],
             msg = rep(
