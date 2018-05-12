@@ -380,25 +380,33 @@ dummy_df <- merge(
 ## they're needed (eg, adds date of study withdrawal onto monthly form, so we
 ## can tell whether they should have a monthly visit or not)
 baseline_df <- merge(
-  subset(dummy_df, redcap_event_name == "Baseline Visit", select = c(study_id)),
+  subset(
+    dummy_df,
+    redcap_event_name == "Baseline Visit",
+    select = c(study_id, redcap_event_name)
+  ),
   baseline_df,
-  by = "study_id", all.x = TRUE
+  by = c("study_id", "redcap_event_name"), all.x = TRUE
 )
 
 monthly_df <- merge(
-  subset(dummy_df,
-         redcap_event_name %in% paste("Month", 1:3),
-         select = -date_visit_m),
+  subset(
+    dummy_df,
+    redcap_event_name %in% paste("Month", 1:3),
+    select = -date_visit_m
+  ),
   monthly_df,
   by = c("study_id", "redcap_event_name"), all.x = TRUE
 )
 
 completion_df <- merge(
-  subset(dummy_df,
-         redcap_event_name == "Study Completion",
-         select = c(study_id, date_enrolled)),
+  subset(
+    dummy_df,
+    redcap_event_name == "Study Completion",
+    select = c(study_id, redcap_event_name, date_enrolled)
+  ),
   completion_df,
-  by = "study_id", all.x = TRUE
+  by = c("study_id", "redcap_event_name"), all.x = TRUE
 )
 
 ## Add an indicator to the monthly form for whether the patient should have a
@@ -406,13 +414,13 @@ completion_df <- merge(
 ## before [month] * 30 days.)
 monthly_df$month_num <-
   with(monthly_df, as.numeric(substr(redcap_event_name, 7, 7)))
-# monthly_df$days_enroll_planned <- with(monthly_df, {
-#   date_enrolled + (month_num * 30) })
 monthly_df$days_enrolled_actual <- with(monthly_df, {
   diff_days(date_visit_m, date_enrolled) })
+monthly_df$date_visit_planned <- with(monthly_df, {
+  date_enrolled + (month_num * 30) })
 monthly_df$out_of_study <- with(monthly_df, {
-  (!is.na(death_date) & death_date < days_enroll_planned) |
-    (!is.na(studywd_date) & studywd_date < days_enroll_planned)
+  (!is.na(death_date) & death_date < date_visit_planned) |
+    (!is.na(studywd_date) & studywd_date < date_visit_planned)
 })
 ## Does the patient have any monthly visit data this month?
 monthly_vars <- subset(datadict, form_name == "monthly_data")$field_name
@@ -477,9 +485,7 @@ should be checked; if the patient is marked as *not* being on statins, *no*
 statins should be checked
 - Height and weight should both be present and within soft limits set in the database
 
-### 2. Setup
-
-### 3. Custom error checking (+ demo of the process)
+### 2. Custom error checking (+ demo of the process)
 
 Our next step is to create a `n x 2` data.frame where each row represents one
 potential problem; the first column is an error code; and the second column is
@@ -625,11 +631,12 @@ custom checks, but every check is `is.na(df[, x])`, and every error message is
 of variables to check, and the data dictionary, from which it gets variable
 labels to create the full error message.
 
-(Variable labels can be very helpful in error messages! No matter how descriptive your field names are, your data entry team is used to seeing "Subject Global
-Assessment," not "sga_b". With little effort, you can make their lives much
-easier and also make the data cleaning process much faster. Here, the data
-dictonary is imported in `dataclean_helpers.R`, using a process similar to the
-one we used to download our raw data, and stored as the object `datadict`.)
+(Variable labels can be very helpful in error messages! No matter how
+descriptive your field names are, your data entry team is used to seeing
+"Subject Global Assessment," not "sga_b". With little effort, you can make their
+lives much easier and also make the data cleaning process much faster. Here, the
+data dictonary is imported in `dataclean_helpers.R`, using a process similar to
+the one we used to download our raw data, and stored as the object `datadict`.)
 
 ```{r demog_missing}
 demog_missing <- check_missing(
@@ -646,7 +653,7 @@ demog_missing
 
 ```
 
-### 5. Check for Values Outside Limits
+### 4. Check for Values Outside Limits
 
 We have several numeric fields that we want to make sure fall within reasonable
 limits (or if they do not, that the values are confirmed to be correct). For
@@ -705,7 +712,7 @@ demog_limits
 
 Later we'll have an example where we specify custom limits.
 
-### 6. Combine All Issues
+### 5. Combine All Issues
 
 That's all we want to check for the Demographics form, so we'll combine these data.frames into a single one for ease.
 
@@ -945,6 +952,73 @@ monthly_final <- do.call(
 
 ```
 
+## Study Completion Form
+
+Each patient should have a study completion form filled out, at the end of the
+study or at death or withdrawal, if those events occur before the study's end.
+We'll check:
+
+- Study completion (yes/no), date are recorded
+- Whether patient withdrew or died are recorded
+- If the patient withdrew, whether date and reason are recorded
+- If the patient died, whether date and cause are recorded
+
+```{r completion_errors}
+## -- All checks ---------------------------------------------------------------
+## Since there's only one variable that should be present for everyone, we'll
+## just include it in the main section rather than doing a separate call for
+## check_missing().
+
+## Create error codes + corresponding messages
+completion_codes <- data.frame(
+  code = c(
+    "miss_comp", "comp_date", "wd_date", "wd_reason", "died_date", "died_cause"
+  ),
+  msg = c(
+    "Missing Has patient completed study?",
+    "Patient completed study, but missing date",
+    "Patient withdrew, but missing date",
+    "Patient withdrew, but missing reason",
+    "Patient died, but missing date",
+    "Patient died, but missing cause"
+  )
+)
+
+completion_issues <- matrix(
+  FALSE, ncol = nrow(completion_codes), nrow = nrow(completion_df)
+)
+colnames(completion_issues) <- completion_codes$code
+rownames(completion_issues) <- with(completion_df, {
+  paste(study_id, redcap_event_name, sep = '; ') })
+
+## Determine true/false for each potential issue
+completion_issues[, "miss_comp"] <- is.na(completion_df$completed_study)
+completion_issues[, "comp_date"] <- with(completion_df, {
+  !is.na(completed_study) & completed_study == "Yes" & is.na(completed_date) })
+completion_issues[, "wd_date"] <- with(completion_df, {
+  !is.na(studywd_yn) & studywd_yn == "Yes" & is.na(studywd_date) })
+completion_issues[, "wd_reason"] <- with(completion_df, {
+  !is.na(studywd_yn) & studywd_yn == "Yes" & is.na(studywd_reason) })
+completion_issues[, "died_date"] <- with(completion_df, {
+  !is.na(death_yn) & death_yn == "Yes" & is.na(death_date) })
+completion_issues[, "died_cause"] <- with(completion_df, {
+  !is.na(death_yn) & death_yn == "Yes" & is.na(death_cause) })
+
+completion_final <- create_error_df(completion_issues, completion_codes)
+
+```
+
+## Combine Everything
+
+That's it! Now we combine all our data issues into one data.frame:
+
+```{r combine_issues}
+all_issues <- do.call(
+  rbind, list(demog_final, baseline_final, monthly_final, completion_final)
+)
+
+```
+
 # Step 3: Remove Unfixable Queries
 
 Sometimes, issues with the data are known but cannot be resolved. For example,
@@ -994,9 +1068,9 @@ coordinating center and the statistician/database manager; as the study
 progresses, you will always find new, fun problems! Thus, we allow for this
 category of "not fixed."
 
-Depending on the study, it might also be helpful to have additional fields,
-such as a reason the query was not corrected or whether a Note to File was
-recorded.
+Depending on the study, it might also be helpful to have additional fields in
+the documentation, such as a reason the query was not corrected or whether a
+Note to File was recorded.
 
 The example documentation codebook for this project can be found [here](https://github.com/jenniferthompson/DataCleanExample/blob/master/codebook_documentation.pdf).
 
