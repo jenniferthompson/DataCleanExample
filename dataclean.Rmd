@@ -485,8 +485,6 @@ demog_errors
 
 ```
 
-
-
 ### 4. Simple checks: Are these fields present?
 
 One of the most common issues we check is simply whether every record has a
@@ -521,13 +519,80 @@ demog_missing
 
 ```
 
-Perfect. That's all we want to check for the Demographics form, so we'll combine
-those two data.frames into a single one for ease.
+### 5. Check for Values Outside Limits
 
-```{r demog_combine}
-demog_final <- do.call(rbind, list(demog_missing, demog_errors))
+We have several numeric fields that we want to make sure fall within reasonable
+limits (or if they do not, that the values are confirmed to be correct). For
+example, it would be very easy for someone to enter a height of 19 centimeters
+when they actually meant 190 centimeters. REDCap has built-in data validation
+rules, and you should take full advantage of them - this will make data entry
+errors much harder. However, it is still possible to enter incorrect values,
+especially if you forget to build these rules into the design of the database
+from the beginning. It will also give you more confidence in these outlying
+values at the time of analysis if these outliers are checked during the process,
+rather than waiting until the point of analysis, when study staff may no longer
+be available or you have to make quick decisions.
+
+The `check_limits_numeric()` function in `dataclean_helpers.R` follows a very
+similar process to `check_missing()`. The difference is that you can specify
+minimum and maximum allowed values for each variable, using either the limits
+set in the REDCap data dictionary, or a custom data.frame.
+
+Let's take a look at the way the relevant columns in the data dictionary are
+formatted:
+
+```{r head_datadict}
+subset(
+  datadict,
+  field_name %in% c("study_id", "dob", "height", "weight"),
+  select = c(
+    field_name, field_label, field_type,
+    text_validation_type_or_show_slider_number,
+    text_validation_min, text_validation_max
+  )
+)
 
 ```
+
+All four of the fields we've chosen to display are `text` fields, but with
+different validation types. `study_id` is purely text; `dob` is text that must
+be formatted as a date; `height` and `weight` are numeric/integer text.
+`check_limits_numeric()` currently only works with numeric field types; if you
+have several dates/times in your database, you could certainly write a second
+version to work with dates.
+
+We'll use these already-specified limits to check for extreme values in height
+and weight. Since we want to use the default values, using this function looks
+very similar to `check_missing()`:
+
+```{r demog_limits}
+demog_limits <- check_limits_numeric(
+  df = baseline_df,
+  variables = c("height", "weight"),
+  ddict = datadict
+)
+
+demog_limits
+
+```
+
+Later we'll have an example where we specify custom limits.
+
+### 6. Combine All Issues
+
+That's all we want to check for the Demographics form, so we'll combine these data.frames into a single one for ease.
+
+```{r demog_combine}
+demog_final <- do.call(rbind, list(demog_missing, demog_limits, demog_errors))
+
+## demog_final
+
+```
+
+## Baseline Visit Form
+
+This process will be very similar to the Demographics form process above.
+
 
 
 
