@@ -206,7 +206,10 @@ check_limits_numeric <- function(
   ## Warning if anything listed in `variables` is not a numeric field
   not_numeric <- setdiff(
     variables,
-    subset(datadict, text_validation_type_or_show_slider_number == "number")$field_name
+    subset(
+      datadict,
+      text_validation_type_or_show_slider_number %in% c("number", "integer")
+    )$field_name
   )
   variables <- setdiff(variables, not_numeric)
 
