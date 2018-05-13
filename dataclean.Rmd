@@ -79,7 +79,8 @@ You can then access the token using the function `Sys.getenv()`.
 ### 2. R's `httr` package, built for working with APIs
 
 More information on `httr` can be found in the documentation and vignettes,
-linked from [CRAN](https://cran.r-project.org/package=httr).
+linked from [CRAN](https://cran.r-project.org/package=httr). (Everything else in
+this tutorial is intentionally in base R to avoid dependencies.)
 
 ## Approaches
 
@@ -88,7 +89,8 @@ There are (at least) two approaches to exporting REDCap data:
 1. Read in the entire database in a single `httr::POST` call, then create subsets in R as needed
 1. Read in specific subsets in separate calls
 
-Approach #1 is fine if your database is not complex or very large, and/or if you are not yet comfortable working with the API. Approach #2 is valuable in more complicated situations.
+Approach #1 is fine if your database is not longitudinal, complex, or very
+large, and/or if you are not yet comfortable working with the API. Approach #2 is valuable in more complicated situations.
 
 For example, here, our database is longitudinal, and different data is
 collected at different time points (for example, date of birth is only
@@ -96,8 +98,8 @@ collected at baseline). If we read in the entire database at once, we will have
 a lot of missing values (for example, date of birth will be missing at each
 monthly visit and study completion, unless we proactively subset the data).
 
-I will show an example of Approach 1 for reference, but will primarily use
-Approach 2. Either way, we want to create the following datasets:
+I will show both approaches for reference, but I primarily use Approach 2.
+Either way, we want to create the following datasets:
 
 - Baseline data
 - Monthly data
@@ -162,13 +164,6 @@ in the `body` argument of `httr::POST`. (Do note that as of the time of this wri
 currently more commonly used and thus it is easier to find documentation and
 assistance for it.)
 
-*(The `rawOrLabel = "label"` and `exportCheckboxLabel = TRUE` elements in the
-`body` argument of `POST` are personal preference. I set these to export labels
-because I usually find that it is more clear - ie, it is easier to figure out
-what `sex == Male` is doing than `sex == 1`. However, depending on your
-database and your purposes, you may want to change these to use the raw numeric
-codes - for example, if you have fields with very long labels.)*
-
 Differences from Approach 1 in the `body` of `httr::POST`:
 
 1. We specify **forms**, using their raw names (eg, `baseline_data` instead of `Baseline Data`).
@@ -191,7 +186,7 @@ Demographic and Baseline Visit forms), as well as study ID. It only exports the
 Baseline Visit event, because all other events would have `NA` values for these
 fields. Therefore, each study ID will have at most one record in this dataset.
 
-```{r baseline_data}
+```{r baseline_data, eval = FALSE}
 ## Data from baseline visit only: Demographics and Baseline Data forms
 baseline_post <- httr::POST(
   url = rc_url,
@@ -217,13 +212,19 @@ baseline_df <- post_to_df(baseline_post)
 
 Beautiful! Keep going for the monthly and study completion forms.
 
+> The `rawOrLabel = "label"` and `exportCheckboxLabel = TRUE` elements in the `body` argument of `POST` are personal preference. I set these to export labels
+because I usually find that it is more clear - ie, it is easier to figure out
+what `sex == Male` is doing than `sex == 1`. However, depending on your
+database and your purposes, you may want to change these to use the raw numeric
+codes - for example, if you have fields with very long labels.
+
 #### Monthly Visit Data
 
 This code chunk exports all the fields collected at each monthly visit (the
 Monthly Visit form), as well as study ID. It exports all three monthly visit events; all other events will have `NA` values for these fields. Each study ID
 will have up to three records in this dataset.
 
-```{r monthly_data}
+```{r monthly_data, eval = FALSE}
 ## Data from all monthly visits
 monthly_post <- httr::POST(
   url = rc_url,
@@ -252,7 +253,7 @@ This code chunk exports all the fields collected at study completion, as well
 as study ID. It exports only the study completion event; therefore, each study
 ID will have at most one record.
 
-```{r completion_data}
+```{r completion_data, eval = FALSE}
 ## Data from study completion visits
 completion_post <- httr::POST(
   url = rc_url,
@@ -271,6 +272,96 @@ completion_df <- post_to_df(completion_post)
 
 ## Double-check if you like! Commented out to save space
 ## completion_df
+
+```
+
+## For Demonstration Purposes
+
+To allow you to run the rest of this tutorial, I've stored some toy data in the
+same format as our example REDCap databases in the `rawdata/` folder in this
+repository. We'll read them in now. (They were exported from REDCap directly
+using the `CSV + labels` option; with this option, the field values as well as
+the field names use the labeled text (eg, "Date of birth") vs the field names
+("dob"). Therefore, one step will be to rename the fields in each database with
+actual variable names.) I've also stored a CSV of the data dictionary in the
+same folder.
+
+```{r csv_data}
+## -- Get variable names for each form -----------------------------------------
+## 1. Read in data dictionary, give it names manually (we'll also use it later)
+datadict_names <- c(
+  "field_name", "form_name", "section_header", "field_type", "field_label",
+  "select_choices_or_calculations", "field_note", 
+  "text_validation_type_or_show_slider_number", "text_validation_min",
+  "text_validation_max", "identifier", "branching_logic", "required_field",
+  "custom_alignment", "question_number", "matrix_group_name", "matrix_ranking",
+  "field_annotation"
+)
+datadict <- read.csv("rawdata/datadict.csv", stringsAsFactors = FALSE)
+names(datadict) <- datadict_names
+
+## 2. Use data dictionary to get names for all the other forms
+demog_names <- c(
+  subset(datadict, form_name == "demographics")$field_name,
+  "demographics_complete"
+)
+## Take out warning "variables"
+demog_names <- setdiff(demog_names, "age_warning")
+## Handle matrices & checkboxes <shakes fist>
+demog_names <- unlist(
+  lapply(
+    as.list(demog_names),
+    function(x){
+      if(x %in% c("gym", "aerobics", "eat", "drink")){
+        paste(x, 0:6, sep = "_")
+      } else if(x == "which_statins"){
+        paste(x, 1:9, sep = "_")
+      } else if(x == "study_id"){
+        c(x, "redcap_event_name")
+      } else{
+        x
+      }
+    }
+  )
+)
+## Shoutout to this brilliant person on StackOverflow:
+## https://stackoverflow.com/a/48768548/7086401
+
+baseline_names <- c(
+  subset(datadict, form_name == "baseline_data")$field_name,
+  "baseline_data_complete"
+)
+monthly_names <- c(
+  setdiff(
+    subset(datadict, form_name == "monthly_data")$field_name, "consent_reminder"
+  ),
+  "monthly_data_complete"
+)
+completion_names <- c(
+  subset(datadict, form_name == "completion_data")$field_name,
+  "completion_data_complete"
+)
+
+baseline_df <- read.csv(
+  "rawdata/baseline_df.csv",
+  stringsAsFactors = FALSE,
+  na.strings = ""
+)
+names(baseline_df) <- c(demog_names, baseline_names)
+
+monthly_df <- read.csv(
+  "rawdata/monthly_df.csv",
+  stringsAsFactors = FALSE,
+  na.strings = ""
+)
+names(monthly_df) <- c("study_id", "redcap_event_name", monthly_names)
+
+completion_df <- read.csv(
+  "rawdata/completion_df.csv",
+  stringsAsFactors = FALSE,
+  na.strings = ""
+)
+names(completion_df) <- c("study_id", "redcap_event_name", completion_names)
 
 ```
 
@@ -541,6 +632,9 @@ to upload to the documentation database.
 ## -- Determine true/false for each potential issue ----------------------------
 ## Study ID, postal codes are checked using regular expressions; set rows which
 ## do *not* meet the regex to TRUE
+## (For regexes, it's easier to do this by using the first-column notation here,
+## because of how grep() works. For other custom checks, however, I find it more
+## readable to say `df_issues[, "issue_name"] <- [condition]`.)
 demog_issues[
   grep("^\\d{1,4}$", baseline_df$study_id, invert = TRUE), "id_format"
   ] <- TRUE
@@ -550,50 +644,45 @@ demog_issues[
   ] <- TRUE
 
 ## Date of birth: Should be within 18 and 110 years of consent date
-demog_issues[
-  with(baseline_df, {
-    difftime(date_enrolled, dob, units = "days") < (18 * 365.25) |
-      difftime(date_enrolled, dob, units = "days") > (110 * 365.25)
-  }),
-  "dob_limits"
-] <- TRUE
+demog_issues[, "dob_limits"] <- with(baseline_df, {
+  !is.na(date_enrolled) & !is.na(dob) &
+    (diff_days(date_enrolled, dob) < (18 * 365.25) |
+       diff_days(date_enrolled, dob) > (110 * 365.25))
+})
 
 ## Birth questions
-demog_issues[
-  with(baseline_df, !is.na(gender) & gender == "Female" & is.na(given_birth)),
-  "birth_yn"
-] <- TRUE
-demog_issues[
-  with(baseline_df, {
-    !is.na(given_birth) & given_birth == "Yes" & is.na(num_children)
-  }),
-  "birth_num"
-] <- TRUE
+demog_issues[, "birth_yn"] <- with(baseline_df, {
+  !is.na(gender) & gender == "Female" & is.na(given_birth) })
+demog_issues[, "birth_num"] <- with(baseline_df, {
+  !is.na(given_birth) & given_birth == "Yes" & is.na(num_children)
+})
 
 ## Activity questions: If all are missing, ask site to confirm
-demog_issues[
-  rowSums(
-    !is.na(
-      baseline_df[
-        ,
-        grep("^(gym|aerobics|eat|drink)\\_[0-6]$", names(baseline_df))
-        ]
-    )
-  ) == 0,
-  "no_activity"
-  ] <- TRUE
+
+## Versions if using API to export: options given download checkboxes as
+##  `day of the week` or NA
+# demog_issues[, "no_activity"] <- rowSums(
+#   !is.na(
+#     baseline_df[,grep("^(gym|aerobics|eat|drink)\\_[0-6]$", names(baseline_df))]
+#   )
+# ) == 0
+# ## Statins
+# demog_issues[, "which_statin"] <- baseline_df$any_statins == "Yes" &
+#     rowSums(!is.na(baseline_df[, paste0("which_statins_", 1:9)])) == 0
+# demog_issues[, "no_statins"] <- baseline_df$any_statins == "No" &
+#     rowSums(!is.na(baseline_df[, paste0("which_statins_", 1:9)])) > 0
+
+## Versions if using CSV format: options given download checkboxes as `Checked`
+##  or `Unchecked`
+demog_issues[, "no_activity"] <- rowSums(
+  baseline_df[,grep("^(gym|aerobics|eat|drink)\\_[0-6]$", names(baseline_df))] == "Checked"
+) == 0
 
 ## Statins
-demog_issues[
-  baseline_df$any_statins == "Yes" &
-    rowSums(!is.na(baseline_df[, paste0("which_statins_", 1:9)])) == 0,
-  "which_statin"
-] <- TRUE
-demog_issues[
-  baseline_df$any_statins == "No" &
-    rowSums(!is.na(baseline_df[, paste0("which_statins_", 1:9)])) > 0,
-  "no_statins"
-] <- TRUE
+demog_issues[, "which_statin"] <- baseline_df$any_statins == "Yes" &
+    rowSums(baseline_df[, paste0("which_statins_", 1:9)] == "Checked") == 0
+demog_issues[, "no_statins"] <- baseline_df$any_statins == "No" &
+    rowSums(baseline_df[, paste0("which_statins_", 1:9)] == "Checked") > 0
 
 demog_issues
 
@@ -718,6 +807,7 @@ That's all we want to check for the Demographics form, so we'll combine these da
 
 ```{r demog_combine}
 demog_final <- do.call(rbind, list(demog_missing, demog_limits, demog_errors))
+demog_final$form <- "Demographics"
 
 ## demog_final
 
@@ -833,6 +923,7 @@ baseline_errors <- create_error_df(baseline_issues, baseline_codes)
 baseline_final <- do.call(
   rbind, list(baseline_missing, baseline_limits, baseline_errors)
 )
+baseline_final$form <- "Baseline Data"
 
 ```
 
@@ -849,7 +940,7 @@ collected at multiple time points. We'll check at every visit:
 - Weight present, within 35-200
 - Number of treatments missed (out of 8) present
 - % compliance present
-- # treatments should be between 0-8 and “match” % compliance
+- number of treatments should be between 0-8 and “match” % compliance
 - Hospitalization (y/n) present
 - If hospitalized, cause, dates, discharge summary questions present
 - If hospitalized, dates should be between last and current visit
@@ -949,6 +1040,7 @@ monthly_limits <- check_limits_numeric(
 monthly_final <- do.call(
   rbind, list(monthly_missing, monthly_limits, monthly_errors)
 )
+monthly_final$form <- "Monthly Data"
 
 ```
 
@@ -1005,19 +1097,52 @@ completion_issues[, "died_cause"] <- with(completion_df, {
   !is.na(death_yn) & death_yn == "Yes" & is.na(death_cause) })
 
 completion_final <- create_error_df(completion_issues, completion_codes)
+completion_final$form <- "Completion Data"
 
 ```
 
 ## Combine Everything
 
-That's it! Now we combine all our data issues into one data.frame:
+That's it! Now we combine all our data issues into one data.frame and prepare it
+to upload to the documentation database.
 
 ```{r combine_issues}
 all_issues <- do.call(
   rbind, list(demog_final, baseline_final, monthly_final, completion_final)
 )
 
+## Separate study_id, redcap_event_name from id column
+id_event <- strsplit(as.character(all_issues$id), "; ")
+all_issues$study_id <- unlist(lapply(id_event, FUN = function(x){ x[[1]] }))
+all_issues$event <-
+  unlist(lapply(id_event, FUN = function(x){ x[[2]] }))
+all_issues <- all_issues[order(all_issues$study_id), ]
+
+## Create a unique query number for all issues for each patient
+all_issues$querynum <- unlist(
+  lapply(
+    unique(all_issues$study_id),
+    FUN = function(i){ 1:sum(all_issues$study_id == i) }
+  )
+)
+
+## Add today's date, create total query ID (study_id + date + querynum)
+all_issues$date_query <- format(Sys.Date(), "%Y-%m-%d")
+all_issues$queryid <-
+  with(all_issues, paste(study_id, date_query, querynum, sep = "_"))
+
+## -- Final version to upload: Query ID, pt ID, date, form, event, issue -------
+all_issues <- subset(
+  all_issues,
+  select = c(queryid, study_id, date_query, form, event, msg)
+)
+
+## Write out to CSV to more easily look at it - will store this in repo
+write.csv(all_issues, "original_issues.csv", row.names = FALSE)
+
 ```
+
+If this is the first time we've run the data clean, we can skip to step 4.
 
 # Step 3: Remove Unfixable Queries
 
@@ -1076,6 +1201,33 @@ The example documentation codebook for this project can be found [here](https://
 
 \newpage
 
+For the purposes of this tutorial, we're going to assume that this is *not* the
+first time we've run this script - ie, that there are already a few issues
+documented and fixed in the original database. These include:
+
+- Entering a study withdrawal date for patient 2
+
+Notes: this should clear up a lot of queries, but not baseline ones
+
+- Entering an consent date for patient 3
+
+Notes: this should *introduce* a new query, because the patient's DOB is in 2018 and thus age will be, like, one month
+
+- Noting that we forgot to weigh patient 3 at baseline; thus that value is
+unfixable (query 3_2018-05-12_2)
+
+Notes: This one shouldn't show up in next clean
+
+- Correcting a highly implausible creatinine value at baseline for patient 4A (query 4A_2018-05-12_7; changed from 95 to 9.5)
+
+Notes: This one shouldn't show up in next clean
+
+- Confirming an outlying creatinine value at Month 1 for patient 4A (query 4A_2018-05-12_11; value of 9.1 was confirmed correct)
+
+Notes: This one shouldn't show up in next clean
+
+Everything else should show up again because it hasn't been fixed. Negative reinforcement: if you don't fix issues, you have to document them TWICE.
+
 ## Exporting Documentation Data
 
 We download the data in our documentation database in the same way as the raw
@@ -1083,7 +1235,7 @@ data. However, note that since it is a separate REDCap project, you will need a
 separate API token. Mine is saved in my `.Renviron` file as the object
 `DOCTOKEN`.
 
-```{r already_checked}
+```{r already_checked, eval = FALSE}
 ## Documentation of queries already checked
 doc_post <- httr::POST(
   url = rc_url,
@@ -1095,15 +1247,66 @@ doc_post <- httr::POST(
     exportCheckboxLabel = TRUE
   )
 )
-## This won't work till I enter some data!
-# doc_df <- post_to_df(doc_post)
+doc_df <- post_to_df(doc_post)
 
 ## Double-check if you like! Commented out to save space
 ## doc_df
+## write.csv(doc_df, file = "doc_df.csv", row.names = FALSE)
+
+```
+
+```{r doc_csv}
+## -- Read in CSV version to continue tutorial ---------------------------------
+doc_df <- read.csv("doc_df.csv", stringsAsFactors = FALSE, na.strings = "")
 
 ```
 
 # Step 4: Disseminate Issues to Study Staff
+
+Though it is possible to import `all_issues` directly to our documentation using
+the REDCap API, we've found it helpful to do this step manually, because it is
+often useful for our primary coordinators to look over the list prior to
+uploading for any systematic errors (eg, all a patient's events are off by one)
+or opportunities for education or communication with study staff. For example,
+if there are many similar issues from the same site, there may be a
+misunderstanding about when a piece of data is to be collected or how it is to
+be entered. If these queries can be discussed and handled in batches, it will
+save both study staff and coordinators time in documentation.
+
+Therefore, we typically separate queries by study site (if the study is
+multicenter); send these to the primary coordinators to look over; and then
+either upload directly, or wait until the coordinators have resolved systematic
+errors with study staff and rerun the data clean once data has been corrected.
+
+Doing this manually does mean that some changes to the data are not documented.
+We have found this to be a fine tradeoff for the number of hours saved
+documenting the same issue and resolution, especially given that one can always
+access data histories for a given field within REDCap itself.
+
+Once the data is uploaded to the documentation database, the staff and coordinators work to resolve and document each issue, leaving the database ready
+for the next round of data cleaning.
+
+```{r attempt_import}
+# ## Maybe export it to a csv?
+# write.csv(x = all_issues, file = "all_issues.csv", row.names = FALSE)
+# 
+# issues_import <- httr::POST(
+#   url = rc_url,
+#   body = list(
+#     token = Sys.getenv("DOCTOKEN"),
+#       ## API token gives you permission to import data
+#     content = "record",
+#     format = "csv",
+#     type = "flat",
+#     overwriteBehavior = "normal",
+#     forceAutoNumber = "false",
+#     data = "all_issues.csv", ##???
+#     returnContent = "count",
+#     returnFormat = "csv"
+#   )
+# )
+
+```
 
 # Step 5: Iterate!
 

@@ -1,0 +1,4 @@
+"Study ID","Event Name","Has patient completed study?","Date of study completion","Did the patient ever withdraw from the study?","Date of study withdrawal","Reason patient withdrew from study","Did the patient die during the study?","Date of death","Cause of death",Comments,Complete?
+1,"Study Completion",Yes,2017-07-01,,,,,,,,Complete
+3,"Study Completion",Yes,2016-06-16,,,,,,,,Complete
+4A,"Study Completion",No,,Yes,2017-12-20,,,,,,Complete
