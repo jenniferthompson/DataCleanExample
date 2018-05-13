@@ -112,6 +112,8 @@ For both approaches, we need this setup:
 library(httr)
 
 ## Source helper functions (script should be stored in this working directory)
+## Function post_to_df(), which is useful in API code, is stored here, along
+## with other helper functions we'll use later
 source("dataclean_helpers.R")
 
 ## Set URL for REDCap instance (yours may be different)
@@ -210,9 +212,7 @@ baseline_df <- post_to_df(baseline_post)
 
 ```
 
-Beautiful! Keep going for the monthly and study completion forms.
-
-> The `rawOrLabel = "label"` and `exportCheckboxLabel = TRUE` elements in the `body` argument of `POST` are personal preference. I set these to export labels
+The `rawOrLabel = "label"` and `exportCheckboxLabel = TRUE` elements in the `body` argument of `POST` are personal preference. I set these to export labels
 because I usually find that it is more clear - ie, it is easier to figure out
 what `sex == Male` is doing than `sex == 1`. However, depending on your
 database and your purposes, you may want to change these to use the raw numeric
@@ -279,89 +279,22 @@ completion_df <- post_to_df(completion_post)
 
 To allow you to run the rest of this tutorial, I've stored some toy data in the
 same format as our example REDCap databases in the `rawdata/` folder in this
-repository. We'll read them in now. (They were exported from REDCap directly
-using the `CSV + labels` option; with this option, the field values as well as
-the field names use the labeled text (eg, "Date of birth") vs the field names
-("dob"). Therefore, one step will be to rename the fields in each database with
-actual variable names.) I've also stored a CSV of the data dictionary in the
-same folder.
+repository, along with a copy of the data dictionary. All are in the same format
+we would see if we used the API as described above.
 
 ```{r csv_data}
-## -- Get variable names for each form -----------------------------------------
-## 1. Read in data dictionary, give it names manually (we'll also use it later)
-datadict_names <- c(
-  "field_name", "form_name", "section_header", "field_type", "field_label",
-  "select_choices_or_calculations", "field_note", 
-  "text_validation_type_or_show_slider_number", "text_validation_min",
-  "text_validation_max", "identifier", "branching_logic", "required_field",
-  "custom_alignment", "question_number", "matrix_group_name", "matrix_ranking",
-  "field_annotation"
+datadict <- read.csv(
+  "rawdata/datadict.csv", stringsAsFactors = FALSE, na.strings = ""
 )
-datadict <- read.csv("rawdata/datadict.csv", stringsAsFactors = FALSE)
-names(datadict) <- datadict_names
-
-## 2. Use data dictionary to get names for all the other forms
-demog_names <- c(
-  subset(datadict, form_name == "demographics")$field_name,
-  "demographics_complete"
-)
-## Take out warning "variables"
-demog_names <- setdiff(demog_names, "age_warning")
-## Handle matrices & checkboxes <shakes fist>
-demog_names <- unlist(
-  lapply(
-    as.list(demog_names),
-    function(x){
-      if(x %in% c("gym", "aerobics", "eat", "drink")){
-        paste(x, 0:6, sep = "_")
-      } else if(x == "which_statins"){
-        paste(x, 1:9, sep = "_")
-      } else if(x == "study_id"){
-        c(x, "redcap_event_name")
-      } else{
-        x
-      }
-    }
-  )
-)
-## Shoutout to this brilliant person on StackOverflow:
-## https://stackoverflow.com/a/48768548/7086401
-
-baseline_names <- c(
-  subset(datadict, form_name == "baseline_data")$field_name,
-  "baseline_data_complete"
-)
-monthly_names <- c(
-  setdiff(
-    subset(datadict, form_name == "monthly_data")$field_name, "consent_reminder"
-  ),
-  "monthly_data_complete"
-)
-completion_names <- c(
-  subset(datadict, form_name == "completion_data")$field_name,
-  "completion_data_complete"
-)
-
 baseline_df <- read.csv(
-  "rawdata/baseline_df.csv",
-  stringsAsFactors = FALSE,
-  na.strings = ""
+  "rawdata/baseline_df.csv", stringsAsFactors = FALSE, na.strings = ""
 )
-names(baseline_df) <- c(demog_names, baseline_names)
-
 monthly_df <- read.csv(
-  "rawdata/monthly_df.csv",
-  stringsAsFactors = FALSE,
-  na.strings = ""
+  "rawdata/monthly_df.csv", stringsAsFactors = FALSE, na.strings = ""
 )
-names(monthly_df) <- c("study_id", "redcap_event_name", monthly_names)
-
 completion_df <- read.csv(
-  "rawdata/completion_df.csv",
-  stringsAsFactors = FALSE,
-  na.strings = ""
+  "rawdata/completion_df.csv", stringsAsFactors = FALSE, na.strings = ""
 )
-names(completion_df) <- c("study_id", "redcap_event_name", completion_names)
 
 ```
 
@@ -661,28 +594,30 @@ demog_issues[, "birth_num"] <- with(baseline_df, {
 
 ## Versions if using API to export: options given download checkboxes as
 ##  `day of the week` or NA
-# demog_issues[, "no_activity"] <- rowSums(
-#   !is.na(
-#     baseline_df[,grep("^(gym|aerobics|eat|drink)\\_[0-6]$", names(baseline_df))]
-#   )
-# ) == 0
-# ## Statins
-# demog_issues[, "which_statin"] <- baseline_df$any_statins == "Yes" &
-#     rowSums(!is.na(baseline_df[, paste0("which_statins_", 1:9)])) == 0
-# demog_issues[, "no_statins"] <- baseline_df$any_statins == "No" &
-#     rowSums(!is.na(baseline_df[, paste0("which_statins_", 1:9)])) > 0
-
-## Versions if using CSV format: options given download checkboxes as `Checked`
-##  or `Unchecked`
 demog_issues[, "no_activity"] <- rowSums(
-  baseline_df[,grep("^(gym|aerobics|eat|drink)\\_[0-6]$", names(baseline_df))] == "Checked"
+  !is.na(
+    baseline_df[,grep("^(gym|aerobics|eat|drink)\\_[0-6]$", names(baseline_df))]
+  )
 ) == 0
 
 ## Statins
 demog_issues[, "which_statin"] <- baseline_df$any_statins == "Yes" &
-    rowSums(baseline_df[, paste0("which_statins_", 1:9)] == "Checked") == 0
+    rowSums(!is.na(baseline_df[, paste0("which_statins_", 1:9)])) == 0
 demog_issues[, "no_statins"] <- baseline_df$any_statins == "No" &
-    rowSums(baseline_df[, paste0("which_statins_", 1:9)] == "Checked") > 0
+    rowSums(!is.na(baseline_df[, paste0("which_statins_", 1:9)])) > 0
+
+# ## Versions if using manually exported CSV "labels" format: exports checkboxes
+# ##  as `Checked` or `Unchecked`
+# ## Activity
+# demog_issues[, "no_activity"] <- rowSums(
+#   baseline_df[,grep("^(gym|aerobics|eat|drink)\\_[0-6]$", names(baseline_df))] == "Checked"
+# ) == 0
+# 
+# ## Statins
+# demog_issues[, "which_statin"] <- baseline_df$any_statins == "Yes" &
+#     rowSums(baseline_df[, paste0("which_statins_", 1:9)] == "Checked") == 0
+# demog_issues[, "no_statins"] <- baseline_df$any_statins == "No" &
+#     rowSums(baseline_df[, paste0("which_statins_", 1:9)] == "Checked") > 0
 
 demog_issues
 
@@ -1206,34 +1141,24 @@ first time we've run this script - ie, that there are already a few issues
 documented and fixed in the original database. These include:
 
 - Entering a study withdrawal date for patient 2
-
-Notes: this should clear up a lot of queries, but not baseline ones
-
+    This should clear up a lot of queries, but not baseline ones.
 - Entering an consent date for patient 3
-
-Notes: this should *introduce* a new query, because the patient's DOB is in 2018 and thus age will be, like, one month
-
+    This should *introduce* a new query, because the patient's DOB is in 2018 and thus age will be <18 years.
 - Noting that we forgot to weigh patient 3 at baseline; thus that value is
-unfixable (query 3_2018-05-12_2)
-
-Notes: This one shouldn't show up in next clean
-
-- Correcting a highly implausible creatinine value at baseline for patient 4A (query 4A_2018-05-12_7; changed from 95 to 9.5)
-
-Notes: This one shouldn't show up in next clean
-
+unfixable (`query 3_2018-05-12_2`)
+    This one shouldn't show up in the next clean.
+- Correcting a highly implausible creatinine value at baseline for patient 4A (query 4A_2018-05-12_7; changed from 95 to 9.5).
+    This one shouldn't show up in the next clean.
 - Confirming an outlying creatinine value at Month 1 for patient 4A (query 4A_2018-05-12_11; value of 9.1 was confirmed correct)
-
-Notes: This one shouldn't show up in next clean
+    This one shouldn't show up in the next clean.
 
 Everything else should show up again because it hasn't been fixed. Negative reinforcement: if you don't fix issues, you have to document them TWICE.
 
 ## Exporting Documentation Data
 
 We download the data in our documentation database in the same way as the raw
-data. However, note that since it is a separate REDCap project, you will need a
-separate API token. Mine is saved in my `.Renviron` file as the object
-`DOCTOKEN`.
+data. Note that since it is a separate REDCap project, you will need a separate
+API token. Mine is saved in my `.Renviron` file as the object `DOCTOKEN`.
 
 ```{r already_checked, eval = FALSE}
 ## Documentation of queries already checked
@@ -1278,10 +1203,10 @@ multicenter); send these to the primary coordinators to look over; and then
 either upload directly, or wait until the coordinators have resolved systematic
 errors with study staff and rerun the data clean once data has been corrected.
 
-Doing this manually does mean that some changes to the data are not documented.
-We have found this to be a fine tradeoff for the number of hours saved
-documenting the same issue and resolution, especially given that one can always
-access data histories for a given field within REDCap itself.
+Doing these systematic changes before uploading queries does mean that some
+changes to the data are not documented. We have found this to be a fine tradeoff
+for the number of hours saved documenting the same issue and resolution,
+especially given that one can always access data histories for a given field within REDCap itself.
 
 Once the data is uploaded to the documentation database, the staff and coordinators work to resolve and document each issue, leaving the database ready
 for the next round of data cleaning.
