@@ -86,9 +86,13 @@ create_error_df <- function(
   error_matrix,
   error_codes
 ){
-  ## All values in error_matrix should be logical or 1/0
-  if(!(is.logical(error_matrix) | all(error_matrix %in% 0:1))){
-    stop("`error_matrix` should be logical or all 0/1", call. = FALSE)
+  ## All values in error_matrix should be logical or 1/0; none missing
+  if(!(is.logical(error_matrix) | all(error_matrix %in% 0:1)) |
+     any(is.na(error_matrix))){
+    stop(
+      "`error_matrix` should be logical or all 0/1 with no missing values",
+      call. = FALSE
+    )
   }
 
   ## error_codes should be a matrix or data.frame with two columns; all columns
