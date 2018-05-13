@@ -1,0 +1,5 @@
+"study_id","redcap_event_name","completed_study","completed_date","studywd_yn","studywd_date","studywd_reason","death_yn","death_date","death_cause","study_comments","completion_data_complete"
+"1","Study Completion","Yes","2017-07-01",,,,,,,,"Complete"
+"2","Study Completion","No",,"Yes","2018-04-27","Could not tolerate the supplement",,,,,"Complete"
+"3","Study Completion","Yes","2016-06-16",,,,,,,,"Complete"
+"4A","Study Completion","No",,"Yes","2017-12-20",,,,,,"Complete"
