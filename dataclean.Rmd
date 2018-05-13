@@ -17,26 +17,61 @@ knitr::opts_chunk$set(echo = TRUE)
 This document demonstrates the ongoing process of data cleaning used by the [Vanderbilt CIBS Center](icudelirium.org). Most of our data is stored in
 [REDCap](projectredcap.org) databases and is cleaned at multiple points
 throughout data collection, with the goal of the highest quality data possible
-in the least amount of time once enrollment is complete. This example will
-demonstrate the R code we use to accomplish this goal, and briefly describe the
-rest of our process.
+in the least amount of time once enrollment is complete. Using a toy example,
+this tutorial will describe our general process and demonstrate the R code we
+use to accomplish this goal.
 
-## Notes
+## Key Points
 
-- All code assumes that the user has rights to use the REDCap API for data export, and that a working API token is stored in the .Renviron file in the working directory, in the format
+- First and foremost, take full advantage of REDCap's design features to
+*prevent* data entry errors. The following process is helpful for correcting
+data entry problems that will always occur, but the more you can *prevent*, the
+better.
+- This process may seem like it takes a lot of time - and it does, especially at
+the beginning. But the end result is worth it: When done well, you will finish
+your study with the highest quality data possible, and will save time and pain
+by catching systematic problems early. It is especially important for long
+and/or multicenter studies, which have more opportunity for staff turnover and
+sites entering and leaving the study midway.
+- Data cleaning should be performed *early* and *often* to be of the most value.
+- The process and the R code will never be perfect or complete from the
+beginning - and that is okay! You should expect to update this process in an
+iterative manner throughout the course of the study.
+- It is incredibly important for the clinical and statistical/database teams to **communicate** during the entire process. This will improve the R code, the
+process, and the data.
+- For R code specifically:
+    - Using REDCap's API allows you to export data automatically every time your
+    script is run, saving manual labor and decreasing room for error.
+    - Take advantage of REDCap's metadata (data dictionary)! It can help save
+    you time and work, especially if the database is designed to take advantage
+    of features like data validation.
+    - For longitudinal studies, it is very helpful to start off by creating a
+    "dummy" dataset, with one record per every patient + event that you expect
+    to be present. This can be simple or complicated depending on the study
+    design and population, but will be very useful in several ways (we'll see an
+    example).
+
+## Notes on the Tutorial
+
+- All code for data export assumes that the user has rights to use the REDCap API for data export, and that a working API token is stored in the `.Renviron` file in the working directory, in the format
 
     `RCTOKEN=manylettersandnumbers`
-
-    For more information on the REDCap API, please see `Project Setup -> Other Functionality` within an existing REDCap project. For general information on working with the API, the [Github wiki of the redcapAPI package](https://github.com/nutterb/redcapAPI/wiki) has a good overview. (This example includes basic API usage and will not use the package, but if you are interested in using more of the API's functionality, it would be a great one to investigate.)
+    
+    If you don't want to use the `.Renviron` file, you can replace `Sys.getenv("RCTOKEN")` with `"manylettersandnumbers"`. If you do this, do not
+    share your code - it is very important to keep your API token secret.
     
 - The code will use several helper functions, sourced from
 `dataclean_helpers.R` in the same working directory/Github repository. The code
-will also be copied in an appendix to this document.
+will also be copied in an appendix to this document so that the tutorial is
+self-contained.
 
-- This script intentionally sticks to base R with very few exceptions, to
-maximize adoption and minimize dependencies. Should you care to refactor with
-the [tidyverse](tidyverse.org) or other packages, alternate versions are
-welcome!
+- This script intentionally uses base R (with the exception of the `httr`
+package), to maximize adoption and minimize dependencies. Should you care to
+refactor with the [tidyverse](tidyverse.org) or other packages, alternate
+versions are welcome!
+
+- The primary information and code needed for this process will be within this PDF; all code and files related to this tutorial can be found in [this Github
+repository](github.com/jenniferthompson/DataCleanExample), which is public and can be cloned or downloaded as a zip file.
 
 ## Motivating Example
 
@@ -49,6 +84,82 @@ from REDCap's project templates.) The study codebook is available
 \tableofcontents
 
 # Process Overview
+
+## Study Startup
+
+Our data cleaning process begins during the study startup period, with careful
+design of the REDCap database. We take full advantage of features like:
+
+- Data validation rules: These tools can help you ensure that lab values are entered as numbers with no text, or that dates are entered in consistent formats. You can also add minimum and maximum values for numeric and date fields. REDCap has built-in validation for some special types of text, such as
+email addresses. For more information, please see REDCap's Help & FAQ page.
+
+![Example of date validation](images/redcap_datevalidation.png){ width=50% }
+
+- Branching logic: This logic tells a specific field when to appear during data
+entry. For example, we often use it to ask whether a patient has taken a specific medication; if yes, the branching logic will show a field that allows
+us to enter the dose of that medication. Branching logic helps enforce data
+collection protocols ("if this, then that should be entered") and helps prevent
+data from being accidentally entered in the wrong fields.
+
+![General Data Cleaning Timeline](images/dataclean_timeline.png)
+
+During this time, the clinical coordinators and statistics/database team also
+work together to develop an initial list of very specific items that should be
+checked during the data cleaning process. Depending on the study design, this
+can be quite a lot of work! But the more thorough we are in this phase, the
+easier the process during the study, and the better the data at the end.
+
+## Early Data Collection
+
+Once study staff has begun entering data into the study database, the
+statistician/database team will write the first version of the R script for data
+cleaning. (It's very hard to write a script before data is available to test
+it!) This is the most time-consuming part of the process for the database team.
+
+## First Data Clean
+
+After a reasonable period of data collection, the statistician/database manager
+will run the R script and create the first list of data entry issues to be
+corrected or addressed. This can be a scary time for study staff! There will
+likely be a few bugs to be worked out, both in the code and in the list of items
+to check. It may take a few tweaks before the team is ready to upload the issues
+to our documentation database and begin the process of correcting them.
+Correcting the data and documenting those steps are the most time-consuming part
+of the process for the clinical team.
+
+\newpage
+
+## Continued Data Collection & Cleaning
+
+![Data Cleaning Iteration](images/dataclean_iteration.png){ width=50% }
+
+As the study progresses, this process continues: the statistician runs the R
+script to find data issues; the study staff corrects or documents issues, and
+communicates potential coding issues or new additions back to the statistician,
+who then updates the script and repeats the process.
+
+Some changes are coding mistakes or misunderstandings, but others may be the
+result of protocol changes, or ideas for new things to check from the project
+coordinators, based on interactions with study staff. This maintenance process
+takes some time on the part of both the statistician/database team, working to
+investigate and debug potential issues or add code for new checks. The following
+things are very helpful during this process:
+
+- Agreement that the data clean is a top priority: This doesn't necessarily mean
+that it is everyone's most *urgent* priority, but it does mean that everyone
+agrees that this is important and should have designated time at an appropriate
+date.
+- Detail-oriented team members: This is a meticulous process for everyone.
+- Strong relationships and open communication between the clinical and
+statistics/database team.
+
+## End of Study
+
+Once data collection is finished, we continue to iterate the data cleaning
+process until there are no more queries from the R script. At that point, you
+should feel free to throw a party.
+
+The rest of this tutorial will focus on the steps of building the R script.
 
 # Step 1: Use REDCap API to Export Raw Data
 
@@ -75,6 +186,14 @@ directory, like this:
 `RCTOKEN=manylettersandnumbers`
 
 You can then access the token using the function `Sys.getenv()`.
+
+For more information on the REDCap API, please see `Project Setup -> Other
+Functionality` within an existing REDCap project. For general information on
+working with the API, the [Github wiki of the redcapAPI
+package](https://github.com/nutterb/redcapAPI/wiki) has a good overview. *(This
+example includes basic API usage and will not use the package, but if you are
+interested in using more of the API's functionality, it could be a good package
+to investigate.)*
 
 ### 2. R's `httr` package, built for working with APIs
 
