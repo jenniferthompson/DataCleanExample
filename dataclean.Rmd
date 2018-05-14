@@ -71,7 +71,8 @@ refactor with the [tidyverse](tidyverse.org) or other packages, alternate
 versions are welcome!
 
 - The primary information and code needed for this process will be within this PDF; all code and files related to this tutorial can be found in [this Github
-repository](github.com/jenniferthompson/DataCleanExample), which is public and can be cloned or downloaded as a zip file.
+repository](https://github.com/jenniferthompson/DataCleanExample), which is
+public and can be cloned or downloaded as a zip file.
 
 ## Motivating Example
 
@@ -436,14 +437,16 @@ We often have groups of very similar potential problems: There are many fields t
 fields which should be between specific limits. We can write custom functions
 to check these types of issues.
 
-One note: REDCap has many data validation capabilities built in - **use them!**
+Remember: REDCap has many data validation capabilities built in - **use them!**
 If your database already checks fields like email for formatting, or gives live
 warning if you enter unlikely lab values, it will save you and the study staff
 time and headaches later. The same applies to using branching logic often and
 well. The added value for this data cleaning script comes from the more complex
 data checks that are possible here and not within REDCap itself. But the more
 of REDCap's powerful features you can use from the beginning, the better your
-data will be throughout the study.
+data will be throughout the study (eg, for DSMB reports and interim analyses).
+
+\newpage
 
 ## Data Management
 
@@ -482,13 +485,30 @@ completion_df$death_date <- date_ymd(completion_df$death_date)
 
 ```
 
-Create a dummy dataset for every patient + time - add more text here
+### Dummy Dataset
+
+For many types of checks, it's helpful to have a dataset with every record that
+*should* be available for each patient. In our example study, patient 2 has a
+baseline record, but no monthly or study completion data. If we clean each form
+separately, it would be very hard to realize that this patient is missing that
+data.
+
+Therefore, we create a "dummy" dataset with one record per patient per expected
+event, and merge this dataset with our other forms as needed. (Depending on the
+study design, this can be straightforward or difficult, but it is *always*
+helpful!)
 
 ```{r dummy_data}
 ## Create "dummy" datasets that have a record for every patient + time
 ## This helps us check things like "pt X is missing Monthly Visit 2"
 ## Knowing the study design is key!
 
+## Lists of all unique IDs, events
+## In our case, every patient should have a record for every month, unless they
+##  have died or withdrawn, along with baseline data & a study completion form.
+##  So we create a dummy dataset with all five events for each patient. Later,
+##  we'll also create an indicator variable for whether the patient has died or
+##  withdrawn at that point (and therefore should *not* have data entered).
 all_ids <- sort(unique(c(
   baseline_df$study_id, monthly_df$study_id, completion_df$study_id
 )))
@@ -499,7 +519,8 @@ dummy_df <- data.frame(
   redcap_event_name = rep(all_events, length(all_ids))
 )
 
-## Merge on relevant dates for each event
+## Merge on relevant dates for each event: enrollment, completion, death,
+##  withdrawal - we will use these to help clean things in each form
 dates_everyone <- merge(
   subset(baseline_df, select = c(study_id, date_enrolled)),
   subset(completion_df, select = c(study_id, completed_date, death_date, studywd_date)),
@@ -520,8 +541,8 @@ dummy_df <- merge(
 ## Merge subsets of dummy data onto individual datasets, to make sure every
 ## dataset has all the patients/records it's supposed to
 ## This step also adds dates from baseline and completion forms onto forms where
-## they're needed (eg, adds date of study withdrawal onto monthly form, so we
-## can tell whether they should have a monthly visit or not)
+##  they're needed (eg, adds date of study withdrawal onto monthly form, so we
+##  can tell whether they *should* have a monthly visit or not)
 baseline_df <- merge(
   subset(
     dummy_df,
@@ -565,7 +586,9 @@ monthly_df$out_of_study <- with(monthly_df, {
   (!is.na(death_date) & death_date < date_visit_planned) |
     (!is.na(studywd_date) & studywd_date < date_visit_planned)
 })
-## Does the patient have any monthly visit data this month?
+
+## Indicator: Does the patient have any monthly visit data this month?
+## Use the data dictionary to save typing!
 monthly_vars <- subset(datadict, form_name == "monthly_data")$field_name
 ## `consent_reminder` is just a reminder field, is not exported
 monthly_vars <- setdiff(monthly_vars, "consent_reminder")
@@ -595,8 +618,8 @@ monthly_df$last_visit <- as.Date(
 ## Demographics Form
 
 The Demographics form is one of the two collected at the baseline visit. In Step 1, we exported it as part of `baseline_df`; this data.frame has one record
-per patient. This is important because it will keep us from finding many
-missing fields where, in actuality, no data should be.
+per patient. If you take Approach 1 (export everything at once), make sure that
+you subset the data to only keep the `Baseline Visit` event.
 
 ### 1. Decide what to clean
 
@@ -1192,7 +1215,7 @@ all_issues <- subset(
 )
 
 ## Write out to CSV to more easily look at it - will store this in repo
-write.csv(all_issues, "original_issues.csv", row.names = FALSE)
+write.csv(all_issues, "querydata/original_issues.csv", row.names = FALSE)
 
 ```
 
@@ -1218,25 +1241,19 @@ blue):
 
 ### Values created by R script
 
-\begin{center}
-  \includegraphics{images/doc_script.png}
-\end{center}
+![Example query in documentation database](images/doc_script.png){width=75%}
 
 `Query ID` is typically a combination of patient ID, the date of the data clean, and a number between 1 and the total number of queries found during that data clean.
 
 ### Values filled out by study staff
 
-\begin{center}
-  \includegraphics{images/doc_site.png}
-\end{center}
+![Study staff section in documentation database](images/doc_site.png){width=75%}
 
 "Accuracy queries" are those that ask staff to confirm extreme values - for example, "Height is less than recommended minimum of xxx cm; please correct or confirm."
 
 ### Values filled out by coordinating center/manager
 
-\begin{center}
-  \includegraphics{images/doc_cc.png}
-\end{center}
+![Study staff section in documentation database](images/doc_cc.png){width=75%}
 
 "Permanently unfixable" queries are those that relate to data that can never be
 recovered; for example, weight is missing at a monthly assessment because the
@@ -1259,19 +1276,75 @@ For the purposes of this tutorial, we're going to assume that this is *not* the
 first time we've run this script - ie, that there are already a few issues
 documented and fixed in the original database. These include:
 
-- Entering a study withdrawal date for patient 2
-    This should clear up a lot of queries, but not baseline ones.
-- Entering an consent date for patient 3
-    This should *introduce* a new query, because the patient's DOB is in 2018 and thus age will be <18 years.
+- Entering a study withdrawal date for patient 2. *This should clear up some
+queries, but not baseline ones.*
+- Entering an consent date for patient 3. *This should **introduce** a new
+query, because the patient's DOB is in 2018 and thus age will be <18 years.*
 - Noting that we forgot to weigh patient 3 at baseline; thus that value is
-unfixable (`query 3_2018-05-12_2`)
-    This one shouldn't show up in the next clean.
-- Correcting a highly implausible creatinine value at baseline for patient 4A (query 4A_2018-05-12_7; changed from 95 to 9.5).
-    This one shouldn't show up in the next clean.
-- Confirming an outlying creatinine value at Month 1 for patient 4A (query 4A_2018-05-12_11; value of 9.1 was confirmed correct)
-    This one shouldn't show up in the next clean.
+unfixable (`query 3_2018-05-12_2`). *We don't want this to be uploaded again.*
 
-Everything else should show up again because it hasn't been fixed. Negative reinforcement: if you don't fix issues, you have to document them TWICE.
+![Documenting an unfixable missing value](images/unfixable.png){width=75%}
+
+- Correcting a highly implausible creatinine value at baseline for patient 4A (query 4A_2018-05-12_7; changed from 95 to 9.5). *This will show up in the next
+clean, but as a "please confirm that this is accurate" query, because the creatinine value is still above the suggested maximum.*
+
+![Correcting an outlying value](images/fixed.png){width=75%}
+
+- Confirming an outlying creatinine value at Month 1 for patient 4A (query 4A_2018-05-12_11; value of 9.1 was confirmed correct). *This shouldn't show
+up in the next clean.*
+
+![Confirming an outlying but correct value](images/confirmed.png){width=75%}
+
+Everything else should show up again because it hasn't been fixed. This means that if study staff have not corrected and documented a query before the data clean is run again, the same issue will show up multiple times. In rare cases
+this could be a helpful motivator, but in general, it is very important for the
+statistics/data team to communicate clearly with clinical/data entry teams about
+appropriate timelines for rerunning the script, to avoid unnecessary 
+double-entry.
+
+## Pause: Download "Fixed" Data
+
+To continue with the tutorial, we need to replace our three datasets with
+versions that include the corrections I detailed above. These files are stored
+in the `fixeddata/` directory.
+
+```{r fixed_data}
+rm("baseline_df", "monthly_df", "completion_df")
+
+baseline_df <- read.csv(
+  "fixeddata/baseline_df.csv", stringsAsFactors = FALSE, na.strings = ""
+)
+monthly_df <- read.csv(
+  "fixeddata/monthly_df.csv", stringsAsFactors = FALSE, na.strings = ""
+)
+completion_df <- read.csv(
+  "fixeddata/completion_df.csv", stringsAsFactors = FALSE, na.strings = ""
+)
+
+```
+
+The script `dataclean_partial.R` in this repository essentially runs our data
+cleaning code thus far on these three updated datasets, resulting in the file
+`querydata/updated_issues.csv`. If we compare it to
+`querydata/original_issues.csv`, we see that:
+
+- Many of the queries for patient 2 are gone, since this patient now is known to
+have withdrawn from the study soon after enrollment; however, we still need
+several baseline data points to be entered.
+- There is no new query for patient 3's consent date, but there is now a query
+for his/her age, which we can now calculate.
+- There is still a query for patient 3's baseline weight, even though it has
+been marked "unfixable."
+- There is no longer a query for patient 4A's baseline creatinine value. (If
+this were a monthly creatinine, it would have been queried again, because we
+used custom minimum and maximum values in the monthly checks. However, at
+baseline, we used the limits specified in the REDCap database, which include a
+maximum of 20 - well above the new value of 9.5.)
+- There is still a query for patient 4A's Month 1 creatinine, even though it has
+been marked accurate.
+
+We want to remove the third and fifth queries above so that they aren't
+repeated. To do that, we'll export the documentation database so that we can
+check it against our new query list.
 
 ## Exporting Documentation Data
 
@@ -1295,21 +1368,69 @@ doc_df <- post_to_df(doc_post)
 
 ## Double-check if you like! Commented out to save space
 ## doc_df
-## write.csv(doc_df, file = "doc_df.csv", row.names = FALSE)
 
 ```
 
+So that you can continue the tutorial, I've saved the result of the above in the
+file `querydata/doc_df.csv`; read it in using:
+
 ```{r doc_csv}
 ## -- Read in CSV version to continue tutorial ---------------------------------
-doc_df <- read.csv("doc_df.csv", stringsAsFactors = FALSE, na.strings = "")
+doc_df <- read.csv(
+  "querydata/doc_df.csv", stringsAsFactors = FALSE, na.strings = ""
+)
+
+```
+
+We now need to merge our current issues (stored in `all_issues`) with our previously documented issues and remove the potential errors which are either
+unfixable or actually correct. To be removed from future data cleans, queries
+must be marked as accurate in the field `corrected`, or must be confirmed by the
+coordinating center as being unfixable in the field `cc_conclusion`. We'll
+create an indicator variable for whether each query meets either condition.
+
+```{r flag_queries}
+doc_df$remove <- with(doc_df, {
+  (!is.na(corrected) &
+     corrected == "Value confirmed correct (for accuracy queries ONLY)") |
+    (!is.na(cc_conclusion) &
+       cc_conclusion == "Yes (it is permanently unfixable)")
+})
+
+subset(doc_df, remove)
+
+```
+
+So far so good. Now we need to add that indicator variable onto our new set of
+data issues, then remove those two.
+
+```{r merge_fixed}
+remaining_issues <- merge(
+  all_issues, subset(doc_df, select = c(study_id, form, event, msg, remove)),
+  by = c("study_id", "form", "event", "msg"),
+  all.x = TRUE, all.y = FALSE
+)
+
+## write.csv(remaining_issues, "querydata/remaining_issues.csv", row.names = FALSE)
+
+```
+
+In `remaining_issues`, we have some queries with a value for `remove` of `FALSE` - these queries are *repeated* from our last clean because they have not been corrected. We have some with a value of `NA`; these are *new* queries (for
+example, now that patient 3 has a consent date entered, some new queries are
+showing up related to it). Finally, we have two queries with `remove = TRUE` -
+these are the two queries listed above. Let's remove them and we'll be done!
+
+```{r remove_documented}
+upload_issues <- subset(remaining_issues, !(!is.na(remove) & remove == TRUE))
+
+## write.csv(upload_issues, "querydata/upload_issues.csv", row.names = FALSE)
 
 ```
 
 # Step 4: Disseminate Issues to Study Staff
 
-Though it is possible to import `all_issues` directly to our documentation using
-the REDCap API, we've found it helpful to do this step manually, because it is
-often useful for our primary coordinators to look over the list prior to
+Though it is possible to import `upload_issues` directly to our documentation
+using the REDCap API, we've found it helpful to do this step manually, because
+it is often useful for our primary coordinators to look over the list prior to
 uploading for any systematic errors (eg, all a patient's events are off by one)
 or opportunities for education or communication with study staff. For example,
 if there are many similar issues from the same site, there may be a
@@ -1330,28 +1451,6 @@ especially given that one can always access data histories for a given field wit
 Once the data is uploaded to the documentation database, the staff and coordinators work to resolve and document each issue, leaving the database ready
 for the next round of data cleaning.
 
-```{r attempt_import}
-# ## Maybe export it to a csv?
-# write.csv(x = all_issues, file = "all_issues.csv", row.names = FALSE)
-# 
-# issues_import <- httr::POST(
-#   url = rc_url,
-#   body = list(
-#     token = Sys.getenv("DOCTOKEN"),
-#       ## API token gives you permission to import data
-#     content = "record",
-#     format = "csv",
-#     type = "flat",
-#     overwriteBehavior = "normal",
-#     forceAutoNumber = "false",
-#     data = "all_issues.csv", ##???
-#     returnContent = "count",
-#     returnFormat = "csv"
-#   )
-# )
-
-```
-
 # Step 5: Iterate!
 
 I mean iteration in two ways.
@@ -1360,13 +1459,13 @@ I mean iteration in two ways.
 
 The more frequently you clean your data, the more prepared you will be for
 things like interim analyses and DSMB or progress reports, and the less time
-you'll have to spend at the end of the study (when everyone is very excited
-about getting the final results!). This is especially important for multicenter
-studies or studies that enroll over years, where sites or staff members may
-join and leave the group; once a site is closed or a coordinator has retired,
-it is (understandably!) a challenge to get effort from that site to clean data.
-Besides, no one wants to get a large, overwhelming number of queries at the
-end of the study!
+you'll have to spend on data cleaning at the end of the study (when everyone is
+very excited about getting the final results!). This is especially important for
+multicenter studies or studies that enroll over years, where sites or staff
+members may join and leave the group; once a site is closed or a coordinator has
+retired, it is (understandably!) a challenge to get effort from that site to
+clean data. Besides, no one wants to get a large, overwhelming number of queries
+at the end of the study!
 
 How frequently you choose to clean your data will depend on enrollment rates
 and how many staff members are available to do the cleaning, but we recommend
@@ -1377,9 +1476,10 @@ repeating this process as often as is reasonable.
 Much like your study protocols, your cleaning script will rarely be perfect on
 the first try. As the study goes on, you will always find more ways that data
 can be "wrong," or have more questions that are inspired by unexpected data or
-discussions with study staff. The vast majority of time spent on this data
-cleaning script is during its initial development, but there will always be
-things that need to be changed or added.
+discussions with study staff, or need to add data checks based on protocol
+changes. The vast majority of time spent on this data cleaning script is during
+its initial development, but there will always be things that need to be changed
+or added.
 
 This is one reason that **communication** between the statistician/database
 manager and study staff is hugely important! We work together not only at the
@@ -1398,6 +1498,20 @@ In addition to improving the data itself and the data cleaning script, we use
 this process as a way to improve our study documents and staff education: If
 there is a piece of data that is systematically showing up as an issue, perhaps it is due to something that was not clearly addressed at the study startup
 visit and needs to be revisited, or should be written out fully in an SOP.
+
+# Conclusions & Acknowledgements
+
+Our group recently finished data collection on the first clinical trial we
+conducted using this process. I can say with absolute certainty that we were
+able to finish data cleaning and lock our database very quickly, with strong
+confidence in our data's accuracy, because we prioritized this data cleaning
+process throughout the course of the study.
+
+This process would be impossible without the dedicated, reliable work of our
+clinical coordinating team and others at the VUMC CIBS Center, as well as the
+work of all of our study site coordinators and principal investigators.
+Particularly, Brenda Pun, Cayce Strength, Leanne Boehm, and Aimee Hoskins have
+played huge parts in making this process a reality, in their roles as project managers and study coordinators.
 
 <!-- \newpage -->
 
