@@ -1,11 +1,8 @@
-## Assumes you already have baseline_df, monthly_df, completion_df in memory
+## Assumes you already have baseline_df, monthly_df, completion_df in memory,
+## as well as date_ymd(), diff_days()
 
 ## ----datamgmt-----------------------------------------------------------------
-## -- Helper functions; we're doing the same thing a lot -----------------------
-## Another reason to make sure all your dates have the same formatting!
-date_ymd <- function(x){ as.Date(x, format = "%Y-%m-%d") }
-diff_days <- function(x, y){ as.numeric(difftime(x, y, units = "days")) }
-
+## Repeat data management on updated data
 ## Baseline data
 baseline_df$dob <- date_ymd(baseline_df$dob)
 baseline_df$date_enrolled <- date_ymd(baseline_df$date_enrolled)
