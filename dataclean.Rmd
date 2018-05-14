@@ -1455,6 +1455,33 @@ changes to the data are not documented. We have found this to be a fine tradeoff
 for the number of hours saved documenting the same issue and resolution,
 especially given that one can always access data histories for a given field within REDCap itself.
 
+If you do want to import using the API, you can use the following code:
+
+```{r import_remaining, eval = FALSE}
+## Write CSV of remaining issues (take out "remove")
+write.csv(
+  subset(remaining_issues, select = -remove),
+  "querydata/api_upload.csv",
+  row.names = FALSE
+)
+
+httr::POST(
+ url = rc_url,
+ body = list(
+   token = Sys.getenv("DOCTOKEN"), ## token stored in .Renviron
+   content = "record",
+   format = "csv",
+   type = "flat",
+   overwriteBehavior = "normal",
+   forceAutoNumber = "false",
+   data = paste(readLines("querydata/api_upload.csv"), collapse = "\n"),
+   returnContent = "count",
+   returnFormat = "csv"
+ )
+)
+
+```
+
 Once the data is uploaded to the documentation database, the staff and coordinators work to resolve and document each issue, leaving the database ready
 for the next round of data cleaning.
 
@@ -1519,6 +1546,9 @@ clinical coordinating team and others at the VUMC CIBS Center, as well as the
 work of all of our study site coordinators and principal investigators.
 Particularly, Brenda Pun, Cayce Strength, Leanne Boehm, and Aimee Hoskins have
 played huge parts in making this process a reality, in their roles as project managers and study coordinators.
+
+Cole Beck and Jeremy Stephens have contributed ideas and R code throughout the
+time that we have used this process, making our scripts more efficient.
 
 \newpage
 
