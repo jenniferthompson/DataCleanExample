@@ -1324,8 +1324,15 @@ completion_df <- read.csv(
 
 The script `dataclean_partial.R` in this repository essentially runs our data
 cleaning code thus far on these three updated datasets, resulting in the file
-`querydata/updated_issues.csv`. If we compare it to
-`querydata/original_issues.csv`, we see that:
+`querydata/updated_issues.csv`.
+
+```{r source_to_here}
+## -- dataclean_partial.R basically gets us to this point in the tutorial, -----
+## -- but using "fixed" data ---------------------------------------------------
+source("tutorialscripts/dataclean_partial.R")
+
+```
+If we compare it to `querydata/original_issues.csv`, we see that:
 
 - Many of the queries for patient 2 are gone, since this patient now is known to
 have withdrawn from the study soon after enrollment; however, we still need
