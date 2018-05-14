@@ -784,7 +784,7 @@ demog_errors
 
 ```
 
-### 4. Simple checks: Are these fields present?
+### 3. Simple checks: Are these fields present?
 
 One of the most common issues we check is simply whether every record has a
 certain field that should always be present. For example, in our Demographics
@@ -1520,13 +1520,13 @@ work of all of our study site coordinators and principal investigators.
 Particularly, Brenda Pun, Cayce Strength, Leanne Boehm, and Aimee Hoskins have
 played huge parts in making this process a reality, in their roles as project managers and study coordinators.
 
-<!-- \newpage -->
+\newpage
 
-<!-- # Appendix: `dataclean_helpers.R` -->
+# Appendix: `dataclean_helpers.R`
 
-<!-- This file contains several "helper functions" which make the processes of -->
-<!-- downloading data and checking problems of similar types easier to do and debug. When using the workflow described here, this file should be stored in the same -->
-<!-- working directory and sourced within the script, as seen above. It is copied here for convenience. -->
+This file contains several "helper functions" which make the processes of
+downloading data and checking problems of similar types easier to do and debug. When using the workflow described here, this file should be stored in the same
+working directory and sourced within the script, as seen above. It is copied here for convenience.
 
-<!-- ```{r, code = readLines("dataclean_helpers.R")} -->
-<!-- ``` -->
+```{r, code = readLines("dataclean_helpers.R")}
+```

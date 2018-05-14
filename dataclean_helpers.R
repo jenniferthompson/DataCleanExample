@@ -1,5 +1,5 @@
 ################################################################################
-## Helper functions for dataclean.R
+## Helper functions for dataclean_script.R, dataclean.Rmd
 ################################################################################
 
 library(httr) ## for working with REDCap API
