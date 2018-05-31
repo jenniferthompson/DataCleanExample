@@ -2,12 +2,10 @@
 
 # Data Cleaning Example
 
-This repo holds code demonstrating the ongoing process of data cleaning used by the [Vanderbilt CIBS Center](http://icudelirium.org). More details forthcoming.
+This repo holds code demonstrating the ongoing process of data cleaning used by the [Vanderbilt CIBS Center](http://icudelirium.org).
 
 The code refers to a sample [REDCap](https://projectredcap.org/) database for a three-month longitudinal study of adult patients taking a dietary supplement and measuring creatinine, HDL and LDL cholesterol, and weight over time. (Sample database is adapted with thanks from REDCap's project templates.) The [study codebook](codebook.pdf) is included here.
 
-*Note*: All code assumes that the user has rights to use the REDCap API for data export, and that a working API token is stored in the `.Renviron` file in the working directory, in the format
+The [**primary tutorial**](https://github.com/jenniferthompson/DataCleanExample/blob/master/dataclean.pdf) is likely the resource of major interest. There is also an [example R script](https://github.com/jenniferthompson/DataCleanExample/blob/master/dataclean_script.R), purled/tangled from the tutorial, that can serve as a base for developing your own data cleaning script. Other files are included as noted in the tutorial.
 
-`RCTOKEN=manylettersandnumbers`
-
-For more information on the REDCap API, please see `Project Setup -> Other Functionality` within an existing REDCap project. For general information on working with the API, the [Github wiki of the `redcapAPI` package](https://github.com/nutterb/redcapAPI/wiki) has a good overview. (This example includes basic API usage and will not use the package, but if you are interested in using more of the API's functionality, it would be a great one to investigate.)
+These materials were originally developed for a workshop series at Osaka City University, Osaka, Japan, June 2018.
