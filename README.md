@@ -8,4 +8,6 @@ The code refers to a sample [REDCap](https://projectredcap.org/) database for a 
 
 The [**primary tutorial**](https://github.com/jenniferthompson/DataCleanExample/blob/master/dataclean.pdf) is likely the resource of major interest. There is also an [example R script](https://github.com/jenniferthompson/DataCleanExample/blob/master/dataclean_script.R), purled/tangled from the tutorial, that can serve as a base for developing your own data cleaning script. Other files are included as noted in the tutorial.
 
-These materials were originally developed for a workshop series at Osaka City University, Osaka, Japan, June 2018.
+These materials were originally developed for a workshop series at Osaka City University, Osaka, Japan, June 2018, but are written to be used publicly under
+an [MIT license](LICENSE.md). Toy data is included here for those without access
+to OCU's REDCap instance.
