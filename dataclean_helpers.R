@@ -25,7 +25,8 @@ post_to_df <- function(post_obj){
 ddict_post <- httr::POST(
   url = "https://redcap.vanderbilt.edu/api/",
   body = list(
-    token = Sys.getenv("RCTOKEN"), ## API token gives you permission to get data
+    token = Sys.getenv("RCTOKEN_OCU_ORG"),
+      ## API token gives you permission to get data
     content = "metadata",          ## export *metadata* (data dictionary)
     format = "csv"                 ## export as *CSV*
   )
