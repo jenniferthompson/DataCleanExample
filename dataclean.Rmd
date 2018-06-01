@@ -53,12 +53,24 @@ process, and the data.
 
 ## Notes on the Tutorial
 
+- The tutorial was originally written for a workshop at Osaka City University, June 2018, and thus refers to OCU's REDCap instance and example databases stored there.
+
+    While the primary information and code needed for the data cleaning process
+    will be within this PDF, all code and files related to this tutorial are
+    public and stored in [this Github
+    repository](https://github.com/jenniferthompson/DataCleanExample), which
+    can be downloaded as a zip file. If you wish to work through this tutorial
+    without access to OCU's REDCap instance, identical toy data is in the
+    repository; the correct files to use will be noted throughout.
+
 - All code for data export assumes that the user has rights to use the REDCap API for data export, and that a working API token is stored in the `.Renviron` file in the working directory, in the format
 
-    `RCTOKEN=manylettersandnumbers`
+    `TOKENNAME=manylettersandnumbers`
     
-    If you don't want to use the `.Renviron` file, you can replace `Sys.getenv("RCTOKEN")` with `"manylettersandnumbers"`. If you do this, do not
-    share your code - it is very important to keep your API token secret.
+    If you don't want to use the `.Renviron` file, you can replace
+    `Sys.getenv("TOKENNAME")` with `"manylettersandnumbers"`. If you do this,
+    do not share your code - it is very important to keep your API token
+    secret.
     
 - The code will use several helper functions, sourced from
 `dataclean_helpers.R` in the same working directory/Github repository. The code
@@ -69,10 +81,6 @@ self-contained.
 package), to maximize adoption and minimize dependencies. Should you care to
 refactor with the [tidyverse](tidyverse.org) or other packages, alternate
 versions are welcome!
-
-- The primary information and code needed for this process will be within this PDF; all code and files related to this tutorial can be found in [this Github
-repository](https://github.com/jenniferthompson/DataCleanExample), which is
-public and can be cloned or downloaded as a zip file.
 
 ## Motivating Example
 
@@ -143,13 +151,12 @@ Some changes are coding mistakes or misunderstandings, but others may be the
 result of protocol changes, or ideas for new things to check from the project
 coordinators, based on interactions with study staff. This maintenance process
 takes some time on the part of both the statistician/database team, working to
-investigate and debug potential issues or add code for new checks. The following
-things are very helpful during this process:
+investigate and debug potential issues or add code for new checks. The following things are very helpful during this process:
 
-- Agreement that the data clean is a top priority: This doesn't necessarily mean
-that it is everyone's most *urgent* priority, but it does mean that everyone
-agrees that this is important and should have designated time at an appropriate
-date.
+- Agreement that the data clean is a top priority: This doesn't necessarily
+mean that it is everyone's most *urgent* priority, but it does mean that
+everyone agrees that this is important and should have designated time at an
+appropriate date.
 - Detail-oriented team members: This is a meticulous process for everyone.
 - Strong relationships and open communication between the clinical and
 statistics/database team.
@@ -170,7 +177,15 @@ manually exporting every time data is cleaned.
 
 ## Requirements:
 
-### 1. Working API token
+### 1. Your API URL
+
+This tells R what REDCap instance to connect to. It will look something like this:
+
+`https://redcap.vanderbilt.edu/api/`
+
+`https://redcap.med.osaka-cu.ac.jp/redcap/api/`
+
+### 2. Working API token
 
 You must have appropriate user rights for your database in order to request an
 API token. Once you have the correct user rights, log into the REDCap project.
@@ -184,9 +199,13 @@ all times. If you share code with other people, one way to do this safely is to
 store your API token in a hidden `.Renviron` file in the appropriate working
 directory, like this:
 
-`RCTOKEN=manylettersandnumbers`
+`TOKENNAME=manylettersandnumbers`
 
-You can then access the token using the function `Sys.getenv()`.
+You can then access the token using the function `Sys.getenv()`. For the
+purposes of this tutorial, mine looks like Figure 3.2 (with actual tokens grayed
+out).
+
+![.Renviron example](images/renviron_example.png)
 
 For more information on the REDCap API, please see `Project Setup -> Other
 Functionality` within an existing REDCap project. For general information on
@@ -196,11 +215,11 @@ example includes basic API usage and will not use the package, but if you are
 interested in using more of the API's functionality, it could be a good package
 to investigate.)*
 
-### 2. R's `httr` package, built for working with APIs
+### 3. R's `httr` package, built for working with APIs
 
 More information on `httr` can be found in the documentation and vignettes,
 linked from [CRAN](https://cran.r-project.org/package=httr). (Everything else in
-this tutorial is intentionally in base R to avoid dependencies.)
+this tutorial is intentionally in base R.)
 
 ## Approaches
 
@@ -237,7 +256,7 @@ library(httr)
 source("dataclean_helpers.R")
 
 ## Set URL for REDCap instance (yours may be different)
-rc_url <- "https://redcap.vanderbilt.edu/api/"
+rc_url <- "https://redcap.med.osaka-cu.ac.jp/redcap/api/"
 
 ```
 
@@ -251,7 +270,7 @@ the data.
 main_post <- httr::POST(
   url = rc_url,
   body = list(
-    token = Sys.getenv("RCTOKEN"),
+    token = Sys.getenv("RCTOKEN_OCU_ORG"),
       ## API token gives you permission to get data
     content = "record",        ## export *records*
     format = "csv",            ## export as *CSV*
@@ -282,7 +301,7 @@ This approach uses three separate `httr::POST` calls to create separate
 datasets that are exactly what we need.
 
 REDCap's API Playground can be useful in figuring out which options to include
-in the `body` argument of `httr::POST`. (Do note that as of the time of this writing, the example R code from the Playground uses `RCurl`; `httr` is
+in the `body` argument of `httr::POST`. (Note that as of the time of this writing, the example R code from the Playground uses `RCurl`; `httr` is
 currently more commonly used and thus it is easier to find documentation and
 assistance for it.)
 
@@ -313,12 +332,12 @@ fields. Therefore, each study ID will have at most one record in this dataset.
 baseline_post <- httr::POST(
   url = rc_url,
   body = list(
-    token = Sys.getenv("RCTOKEN"), ## API token gives you permission
-    content = "record",            ## export *records*
-    format = "csv",                ## export as *CSV*
-    forms = "demographics,baseline_data", ## forms
-    fields = c("study_id"),               ## additional fields
-    events = "baseline_visit_arm_1",      ## baseline visit event only
+    token = Sys.getenv("RCTOKEN_OCU_ORG"), ## API token gives you permission
+    content = "record",                    ## export *records*
+    format = "csv",                        ## export as *CSV*
+    forms = "demographics,baseline_data",  ## forms
+    fields = c("study_id"),                ## additional fields
+    events = "baseline_visit_arm_1",       ## baseline visit event only
     rawOrLabel = "label",      ## export factor *labels* vs numeric codes
     exportCheckboxLabel = TRUE ## export ckbox *labels* vs Unchecked/Checked
   )
@@ -349,7 +368,7 @@ will have up to three records in this dataset.
 monthly_post <- httr::POST(
   url = rc_url,
   body = list(
-    token = Sys.getenv("RCTOKEN"),           ## API token gives you permission
+    token = Sys.getenv("RCTOKEN_OCU_ORG"),   ## API token gives you permission
     content = "record",                      ## export *records*
     format = "csv",                          ## export as *CSV*
     forms = "monthly_data",                  ## forms
@@ -378,12 +397,12 @@ ID will have at most one record.
 completion_post <- httr::POST(
   url = rc_url,
   body = list(
-    token = Sys.getenv("RCTOKEN"),     ## API token gives you permission
-    content = "record",                ## export *records*
-    format = "csv",                    ## export as *CSV*
-    forms = "completion_data",         ## form
-    fields = c("study_id"),            ## additional fields
-    events = "study_completion_arm_1", ## study completion event
+    token = Sys.getenv("RCTOKEN_OCU_ORG"), ## API token gives you permission
+    content = "record",                    ## export *records*
+    format = "csv",                        ## export as *CSV*
+    forms = "completion_data",             ## form
+    fields = c("study_id"),                ## additional fields
+    events = "study_completion_arm_1",     ## study completion event
     rawOrLabel = "label",      ## export factor *labels* vs numeric codes
     exportCheckboxLabel = TRUE ## export ckbox *labels* vs Unchecked/Checked
   )
@@ -397,10 +416,17 @@ completion_df <- post_to_df(completion_post)
 
 ## For Demonstration Purposes
 
-To allow you to run the rest of this tutorial, I've stored some toy data in the
-same format as our example REDCap databases in the `rawdata/` folder in this
-repository, along with a copy of the data dictionary. All are in the same format
-we would see if we used the API as described above.
+**OCU team**: If your API tokens are set up and stored in your `.Renviron` file
+like mine, you should be able to run all the code up to this point. If you don't
+want to use the `.Renviron` file, you can run all the code but replace `token = Sys.getenv("RCTOKEN_OCU_ORG")` with `token = "yourapitoken"`.
+
+If you do not have an API token for OCU's REDCap instance, I've stored some toy
+data in the same format as our example REDCap databases, along with a copy of
+the data dictionary, in the `rawdata/` folder in this repository to allow you to
+continue with the tutorial. All are in the same format we would see if we used
+the API as described above.
+
+If you have downloaded the entire repository, you can run this code:
 
 ```{r csv_data}
 datadict <- read.csv(
