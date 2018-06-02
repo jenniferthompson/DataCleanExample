@@ -66,8 +66,13 @@ library(httr)
 ## with other helper functions we'll use later
 source("dataclean_helpers.R")
 
-## Set URL for REDCap instance (yours may be different)
-rc_url <- "https://redcap.vanderbilt.edu/api/"
+## Set URL for REDCap instance (change to yours if needed!)
+rc_url <- "https://redcap.med.osaka-cu.ac.jp/redcap/api/"
+
+## -- httr calls assume you have API tokens stored in your .Renviron file: -----
+## RCTOKEN_OCU_ORG=yourtoken,originaldata
+## RCTOKEN_OCU_CORR=yourtoken,correcteddata
+## DOCTOKEN_OCU=yourtoken,documentationdata
 
 ## ----baseline_data------------------------------------------------------------
 ## Data from baseline visit only: Demographics and Baseline Data forms
@@ -818,6 +823,7 @@ doc_df$remove <- with(doc_df, {
        cc_conclusion == "Yes (it is permanently unfixable)")
 })
 
+## Check: Which ones should be removed?
 subset(doc_df, remove)
 
 ## ----merge_fixed---------------------------------------------------------
