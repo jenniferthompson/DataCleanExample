@@ -1,5 +1,6 @@
 ---
 title: "R + REDCap Example Data Cleaning Workflow"
+subtitle: "Additional resources on Github: [github.com/jenniferthompson/DataCleanExample](https://github.com/jenniferthompson/DataCleanExample)"
 author: "Jennifer Thompson, MPH"
 date: "June 4, 2018"
 output: pdf_document
@@ -53,7 +54,9 @@ process, and the data.
 
 ## Notes on the Tutorial
 
-- The tutorial was originally written for a workshop at Osaka City University, June 2018, and thus refers to OCU's REDCap instance and example databases stored there.
+- The tutorial was originally written for a workshop at Osaka City University,
+June 2018, and thus refers to OCU's REDCap instance and example databases stored
+there.
 
     While the primary information and code needed for the data cleaning process
     will be within this PDF, all code and files related to this tutorial are
@@ -62,8 +65,15 @@ process, and the data.
     can be downloaded as a zip file. If you wish to work through this tutorial
     without access to OCU's REDCap instance, identical toy data is in the
     repository; the correct files to use will be noted throughout.
+    
+    The file [`dataclean_script.R`](https://github.com/jenniferthompson/DataCleanExample/blob/master/dataclean_script.R) in the Github repository is a
+    [purled](https://www.rdocumentation.org/packages/knitr/versions/1.20/topics/knit)
+    version of the code in this PDF, and will be useful to anyone trying to
+    follow along (OCU or not!).
 
-- All code for data export assumes that the user has rights to use the REDCap API for data export, and that a working API token is stored in the `.Renviron` file in the working directory, in the format
+- All code for data export assumes that the user has rights to use the REDCap
+API for data export, and that a working API token is stored in the `.Renviron`
+file in the working directory, in the format
 
     `TOKENNAME=manylettersandnumbers`
     
@@ -238,6 +248,9 @@ If you don't know your API URL, you can find it this way once you have your API 
 1. Choose an option under "Supported Actions," such as "Export Records"
 1. The URL will appear on the next page
 
+Once you have your API URL, make sure to update it in your copies of
+`dataclean_script.R` and `dataclean_helpers.R` in order to continue the tutorial.
+
 ### 3. R's `httr` package, built for working with APIs
 
 More information on `httr` can be found in the documentation and vignettes,
@@ -285,6 +298,8 @@ source("dataclean_helpers.R")
 rc_url <- "https://redcap.med.osaka-cu.ac.jp/redcap/api/"
 
 ```
+
+\newpage
 
 ### Approach 1: Example
 
@@ -1340,8 +1355,8 @@ The example documentation codebook for this project can be found [here](https://
 
 \newpage
 
-For the purposes of this tutorial, we're going to assume that this is *not* the
-first time we've run this script - ie, that there are already a few issues
+For the purposes of this tutorial, we're now going to assume that this is *not*
+the first time we've run this script - ie, that there are already a few issues
 documented and fixed in the original database. These include:
 
 - Entering a study withdrawal date for patient 2. *This should clear up some
@@ -1353,8 +1368,10 @@ unfixable (`query 3_2018-05-12_2`). *We don't want this to be uploaded again.*
 
 ![Documenting an unfixable missing value](images/unfixable.png){width=75%}
 
-- Correcting a highly implausible creatinine value at baseline for patient 4A (query 4A_2018-05-12_7; changed from 95 to 9.5). *This will show up in the next
-clean, but as a "please confirm that this is accurate" query, because the creatinine value is still above the suggested maximum.*
+- Correcting a highly implausible creatinine value at baseline for patient 4A
+(query 4A_2018-05-12_7; changed from 95 to 9.5). *This will show up in the next
+clean, but as a "please confirm that this is accurate" query, because the
+creatinine value is still above the suggested maximum.*
 
 ![Correcting an outlying value](images/fixed.png){width=75%}
 
@@ -1363,7 +1380,9 @@ up in the next clean.*
 
 ![Confirming an outlying but correct value](images/confirmed.png){width=75%}
 
-Everything else should show up again because it hasn't been fixed. This means that if study staff have not corrected and documented a query before the data clean is run again, the same issue will show up multiple times. In rare cases
+Everything else should show up again because it hasn't been fixed. This means
+that if study staff have not corrected and documented a query before the data
+clean is run again, the same issue will show up multiple times. In rare cases
 this could be a helpful motivator, but in general, it is **very important** for
 the statistics/data team to communicate clearly with clinical/data entry teams
 about appropriate timelines for rerunning the script, to avoid unnecessary
@@ -1372,15 +1391,17 @@ double-entry.
 ## Pause: Download "Fixed" Data
 
 To continue with the tutorial, we need to replace our three datasets with
-versions that include the corrections I detailed above.
+versions that *include* the corrections I detailed above.
 
 **OCU team:** If your `.Renviron` is set up like mine, you should be able to run
 `dataclean_partial_ocu.R` to get to this point in the tutorial, but with the
 corrected data rather than the original data.
 
 **Those using CSV files from repository**: The files with corrected data are
-stored in the `fixeddata/` directory. The script `dataclean_partial.R` in this repository reads in these files and runs our data cleaning code thus far on
-these three updated datasets, resulting in the file `querydata/updated_issues.csv`.
+stored in the `fixeddata/` directory. The script `dataclean_partial.R` in this
+repository reads in these files and runs our data cleaning code thus far on
+these three updated datasets, resulting in the file
+`querydata/updated_issues.csv`.
 
 If we compare our *new* issues to our *original* ones (in the repository, `querydata/updated_issues.csv` to `querydata/original_issues.csv`), we see that:
 
@@ -1409,6 +1430,9 @@ We download the data in our documentation database in the same way as the raw
 data. Note that since it is a separate REDCap project, you will need a separate
 API token. Mine is saved in my `.Renviron` file as the object `DOCTOKEN_OCU`.
 
+**OCU team**: If your `.Renviron` is set up like mine, you should be able to run
+this code chunk to export the documentation data:
+
 ```{r already_checked, eval = FALSE}
 ## Documentation of queries already checked
 doc_post <- httr::POST(
@@ -1429,7 +1453,8 @@ doc_df <- post_to_df(doc_post)
 ```
 
 **Those using the repository**: So that you can continue the tutorial, I've
-saved the result of the above in the file `querydata/doc_df.csv`; read it in using:
+saved the result of the above in the file `querydata/doc_df.csv`; read it in
+using:
 
 ```{r doc_csv}
 ## -- Read in CSV version to continue tutorial ---------------------------------
@@ -1439,11 +1464,18 @@ doc_df <- read.csv(
 
 ```
 
-We now need to merge our current issues (stored in `all_issues`) with our previously documented issues and remove the potential errors which are either
+## Removing Unneeded Issues
+
+We now need to merge our current issues (stored in `all_issues`) with our
+previously documented issues and remove the potential errors which are either
 unfixable or actually correct. To be removed from future data cleans, queries
-must be marked as accurate in the field `corrected`, or must be confirmed by the
-coordinating center as being unfixable in the field `cc_conclusion`. We'll
-create an indicator variable for whether each query meets either condition.
+must be marked as either:
+
+1. **Accurate**, by the data team in the field `corrected`
+1. Confirmed by the coordinating center as being **unfixable** in the field
+`cc_conclusion`
+
+We'll create an indicator variable for whether each query meets either condition.
 
 ```{r flag_queries}
 doc_df$remove <- with(doc_df, {
@@ -1457,8 +1489,8 @@ subset(doc_df, remove)
 
 ```
 
-So far so good. Now we need to add that indicator variable onto our new set of
-data issues, then remove those two.
+Now we need to 1) add that indicator variable onto our new set of data issues,
+then 2) remove those two which are confirmed correct or unable to be corrected.
 
 ```{r merge_fixed}
 remaining_issues <- merge(
@@ -1471,10 +1503,16 @@ remaining_issues <- merge(
 
 ```
 
-In `remaining_issues`, we have some queries with a value for `remove` of `FALSE` - these queries are *repeated* from our last clean because they have not been corrected. We have some with a value of `NA`; these are *new* queries (for
-example, now that patient 3 has a consent date entered, some new queries are
-showing up related to it). Finally, we have two queries with `remove = TRUE` -
-these are the two queries listed above. Let's remove them and we'll be done!
+**Note**: In `dataclean_script.R`, we just subset `all_issues` directly, without
+the intermediate object, because there is no need to keep the entire set of
+issues. I use an intermediate object here so that we can more easily compare the
+files in the repository, but in your actual workflow it is up to you!
+
+Compared to our original set of queries, we see some new ones; for example, now
+that patient 3 has a consent date entered, some new queries are showing up
+related to it. We also have two queries with `remove = TRUE` - these are the two
+queries listed above, which still meet our definition of potential problems, but
+are accurate or cannot be fixed. Let's remove them and we'll be done!
 
 ```{r remove_documented}
 upload_issues <- subset(remaining_issues, !(!is.na(remove) & remove == TRUE))
@@ -1486,8 +1524,8 @@ upload_issues <- subset(remaining_issues, !(!is.na(remove) & remove == TRUE))
 # Step 4: Disseminate Issues to Study Staff
 
 Though it is possible to import `upload_issues` directly to our documentation
-using the REDCap API, we've found it helpful to do this step manually, because
-it is often useful for our primary coordinators to look over the list prior to
+using the REDCap API, our team has found it helpful to do this step **manually**.
+It is often useful for our clinical coordinators to look over the list prior to
 uploading for any systematic errors (eg, all a patient's events are off by one)
 or opportunities for education or communication with study staff. For example,
 if there are many similar issues from the same site, there may be a
@@ -1495,17 +1533,22 @@ misunderstanding about when a piece of data is to be collected or how it is to
 be entered. If these queries can be discussed and handled in batches, it will
 save both study staff and coordinators time in documentation.
 
-Therefore, we typically separate queries by study site (if the study is
-multicenter); send these to the primary coordinators to look over; and then
-either upload directly, or wait until the coordinators have resolved systematic
-errors with study staff and rerun the data clean once data has been corrected.
+Therefore, we typically separate issues by study site (if the study is
+multicenter); send these in separate CSV files to the clinical project managers
+to look over; and then either upload directly, or wait until the coordinators
+have resolved systematic errors with study staff and rerun the data clean once
+data has been corrected.
 
 Doing these systematic changes before uploading queries does mean that some
 changes to the data are not documented. We have found this to be a fine tradeoff
 for the number of hours saved documenting the same issue and resolution,
-especially given that one can always access data histories for a given field within REDCap itself.
+especially given that one can always access data histories for a given field
+within REDCap itself.
 
-If you do want to import using the API, you can use the following code:
+## Code for API Import
+
+If you do want to import your updated issues automatically using the API, you
+can use the following code:
 
 ```{r import_remaining, eval = FALSE}
 ## Write CSV of remaining issues (take out "remove")
@@ -1518,7 +1561,7 @@ write.csv(
 httr::POST(
  url = rc_url,
  body = list(
-   token = Sys.getenv("DOCTOKEN"), ## token stored in .Renviron
+   token = Sys.getenv("DOCTOKEN_OCU"), ## token stored in .Renviron
    content = "record",
    format = "csv",
    type = "flat",
@@ -1532,7 +1575,8 @@ httr::POST(
 
 ```
 
-Once the data is uploaded to the documentation database, the staff and coordinators work to resolve and document each issue, leaving the database ready
+Once the data is uploaded to the documentation database, the staff and
+coordinators work to resolve and document each issue, leaving the database ready
 for the next round of data cleaning.
 
 # Step 5: Iterate!
@@ -1580,33 +1624,38 @@ the next round.
 
 In addition to improving the data itself and the data cleaning script, we use
 this process as a way to improve our study documents and staff education: If
-there is a piece of data that is systematically showing up as an issue, perhaps it is due to something that was not clearly addressed at the study startup
-visit and needs to be revisited, or should be written out fully in an SOP.
+there is a piece of data that is systematically showing up as an issue, perhaps
+it is due to something that was not clearly addressed at the study startup visit
+and needs to be revisited, or should be written out fully in an SOP.
 
 # Conclusions & Acknowledgements
 
 Our group recently finished data collection on the first clinical trial we
-conducted using this process. I can say with absolute certainty that we were
-able to finish data cleaning and lock our database very quickly, with strong
-confidence in our data's accuracy, because we prioritized this data cleaning
-process throughout the course of the study.
+conducted using this process - a large, multicenter trial with a complicated
+study design. I can say with absolute certainty that we were able to finish data
+cleaning and lock our database very quickly, with strong confidence in our
+data's accuracy, because we prioritized this data cleaning process throughout
+the course of the study.
 
 This process would be impossible without the dedicated, reliable work of our
 clinical coordinating team and others at the VUMC CIBS Center, as well as the
 work of all of our study site coordinators and principal investigators.
-Particularly, Brenda Pun, Cayce Strength, Leanne Boehm, and Aimee Hoskins have
-played huge parts in making this process a reality, in their roles as project managers and study coordinators.
+Particularly, **Brenda Pun, Cayce Strength, Leanne Boehm, and Aimee Hoskins**
+have played huge parts in making this process a reality, in their roles as
+project managers and study coordinators.
 
-Cole Beck and Jeremy Stephens have contributed ideas and R code throughout the
-time that we have used this process, making our scripts more efficient.
+**Cole Beck and Jeremy Stephens** have contributed ideas and R code throughout
+the time that we have used this process, making our scripts more efficient.
 
 \newpage
 
 # Appendix: `dataclean_helpers.R`
 
 This file contains several "helper functions" which make the processes of
-downloading data and checking problems of similar types easier to do and debug. When using the workflow described here, this file should be stored in the same
-working directory and sourced within the script, as seen above. It is copied here for convenience.
+downloading data and checking problems of similar types easier to do and debug.
+When using the workflow described here, this file should be stored in the same
+working directory and sourced within the script, as seen above. It is copied
+here for convenience.
 
 ```{r, code = readLines("dataclean_helpers.R")}
 ```
