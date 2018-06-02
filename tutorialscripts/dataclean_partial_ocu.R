@@ -2,6 +2,9 @@
 ## Read in **corrected data**, do data management to continue tutorial
 ################################################################################
 
+## -- Remove everything so far from memory -------------------------------------
+rm(list = ls())
+
 ## -- Same as before, but using API tokens for *corrected* example database ----
 source("dataclean_helpers.R")
 rc_url <- "https://redcap.med.osaka-cu.ac.jp/redcap/api/"
@@ -606,5 +609,5 @@ all_issues <- subset(
   select = c(queryid, study_id, date_query, form, event, msg)
 )
 
-## Write out to CSV to more easily look at it - will store this in repo
-write.csv(all_issues, "querydata/updated_issues.csv", row.names = FALSE)
+## Write out to CSV to more easily look at it - this is stored in repo
+# write.csv(all_issues, "querydata/updated_issues.csv", row.names = FALSE)

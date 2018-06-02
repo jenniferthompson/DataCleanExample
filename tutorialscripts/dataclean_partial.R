@@ -1,5 +1,16 @@
-## Assumes you already have baseline_df, monthly_df, completion_df in memory,
-## as well as date_ymd(), diff_days()
+## Assumes you already have date_ymd(), diff_days() in memory
+
+rm("baseline_df", "monthly_df", "completion_df")
+
+baseline_df <- read.csv(
+  "fixeddata/baseline_df.csv", stringsAsFactors = FALSE, na.strings = ""
+)
+monthly_df <- read.csv(
+  "fixeddata/monthly_df.csv", stringsAsFactors = FALSE, na.strings = ""
+)
+completion_df <- read.csv(
+  "fixeddata/completion_df.csv", stringsAsFactors = FALSE, na.strings = ""
+)
 
 ## ----datamgmt-----------------------------------------------------------------
 ## Repeat data management on updated data
@@ -543,5 +554,5 @@ all_issues <- subset(
   select = c(queryid, study_id, date_query, form, event, msg)
 )
 
-## Write out to CSV to more easily look at it - will store this in repo
-write.csv(all_issues, "querydata/updated_issues.csv", row.names = FALSE)
+## Write out to CSV to more easily look at it; stored in repo
+# write.csv(all_issues, "querydata/updated_issues.csv", row.names = FALSE)
