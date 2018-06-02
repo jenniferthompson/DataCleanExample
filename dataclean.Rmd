@@ -1285,12 +1285,16 @@ write.csv(all_issues, "querydata/original_issues.csv", row.names = FALSE)
 
 If this is the first time we've run the data clean, we can skip to step 4.
 
-# Step 3: Remove Unfixable Queries
+# Step 3: Remove Unfixable/Correct Queries
 
 Sometimes, issues with the data are known but cannot be resolved. For example,
 if a patient was not weighed at a monthly visit, that value can never be
 entered. Repeating these queries forces study staff to re-investigate problems
 they have already documented, which is both irritating and a waste of time and effort.
+
+In addition, we may have extreme values in our data which we flag as potential
+issues, but are actually correct (eg, someone really did have glucose that
+high). These, too, should not be repeated once they are checked and confirmed.
 
 Therefore, an important step in our process is the **documentation** of each
 issue. This both serves as a record of why the original data changed and
@@ -1360,43 +1364,25 @@ up in the next clean.*
 ![Confirming an outlying but correct value](images/confirmed.png){width=75%}
 
 Everything else should show up again because it hasn't been fixed. This means that if study staff have not corrected and documented a query before the data clean is run again, the same issue will show up multiple times. In rare cases
-this could be a helpful motivator, but in general, it is very important for the
-statistics/data team to communicate clearly with clinical/data entry teams about
-appropriate timelines for rerunning the script, to avoid unnecessary 
+this could be a helpful motivator, but in general, it is **very important** for
+the statistics/data team to communicate clearly with clinical/data entry teams
+about appropriate timelines for rerunning the script, to avoid unnecessary
 double-entry.
 
 ## Pause: Download "Fixed" Data
 
 To continue with the tutorial, we need to replace our three datasets with
-versions that include the corrections I detailed above. These files are stored
-in the `fixeddata/` directory.
+versions that include the corrections I detailed above.
 
-```{r fixed_data}
-rm("baseline_df", "monthly_df", "completion_df")
+**OCU team:** If your `.Renviron` is set up like mine, you should be able to run
+`dataclean_partial_ocu.R` to get to this point in the tutorial, but with the
+corrected data rather than the original data.
 
-baseline_df <- read.csv(
-  "fixeddata/baseline_df.csv", stringsAsFactors = FALSE, na.strings = ""
-)
-monthly_df <- read.csv(
-  "fixeddata/monthly_df.csv", stringsAsFactors = FALSE, na.strings = ""
-)
-completion_df <- read.csv(
-  "fixeddata/completion_df.csv", stringsAsFactors = FALSE, na.strings = ""
-)
+**Those using CSV files from repository**: The files with corrected data are
+stored in the `fixeddata/` directory. The script `dataclean_partial.R` in this repository reads in these files and runs our data cleaning code thus far on
+these three updated datasets, resulting in the file `querydata/updated_issues.csv`.
 
-```
-
-The script `dataclean_partial.R` in this repository essentially runs our data
-cleaning code thus far on these three updated datasets, resulting in the file
-`querydata/updated_issues.csv`.
-
-```{r source_to_here}
-## -- dataclean_partial.R basically gets us to this point in the tutorial, -----
-## -- but using "fixed" data ---------------------------------------------------
-source("tutorialscripts/dataclean_partial.R")
-
-```
-If we compare it to `querydata/original_issues.csv`, we see that:
+If we compare our *new* issues to our *original* ones (in the repository, `querydata/updated_issues.csv` to `querydata/original_issues.csv`), we see that:
 
 - Many of the queries for patient 2 are gone, since this patient now is known to
 have withdrawn from the study soon after enrollment; however, we still need
@@ -1421,14 +1407,14 @@ check it against our new query list.
 
 We download the data in our documentation database in the same way as the raw
 data. Note that since it is a separate REDCap project, you will need a separate
-API token. Mine is saved in my `.Renviron` file as the object `DOCTOKEN`.
+API token. Mine is saved in my `.Renviron` file as the object `DOCTOKEN_OCU`.
 
 ```{r already_checked, eval = FALSE}
 ## Documentation of queries already checked
 doc_post <- httr::POST(
   url = rc_url,
   body = list(
-    token = Sys.getenv("DOCTOKEN"),
+    token = Sys.getenv("DOCTOKEN_OCU"),
     content = "record",
     format = "csv",
     rawOrLabel = "label",
@@ -1442,8 +1428,8 @@ doc_df <- post_to_df(doc_post)
 
 ```
 
-So that you can continue the tutorial, I've saved the result of the above in the
-file `querydata/doc_df.csv`; read it in using:
+**Those using the repository**: So that you can continue the tutorial, I've
+saved the result of the above in the file `querydata/doc_df.csv`; read it in using:
 
 ```{r doc_csv}
 ## -- Read in CSV version to continue tutorial ---------------------------------
