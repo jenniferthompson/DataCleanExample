@@ -69,6 +69,11 @@ source("dataclean_helpers.R")
 ## Set URL for REDCap instance (yours may be different)
 rc_url <- "https://redcap.med.osaka-cu.ac.jp/redcap/api/"
 
+## -- httr calls assume you have API tokens stored in your .Renviron file: -----
+## RCTOKEN_OCU_ORG=yourtoken,originaldata
+## RCTOKEN_OCU_CORR=yourtoken,correcteddata
+## DOCTOKEN_OCU=yourtoken,documentationdata
+
 ## ----baseline_data------------------------------------------------------------
 ## Data from baseline visit only: Demographics and Baseline Data forms
 baseline_post <- httr::POST(
@@ -287,7 +292,7 @@ monthly_df$any_data <- rowSums(!is.na(monthly_df[, monthly_vars])) > 0
 
 ## Create a variable for *last* month's visit, to check hospitalization dates
 ## Note: There may be better ways to do this in base (maybe split/unsplit?).
-## I would usually use dplyr:
+## I would usually use the dplyr package:
 ## monthly_df %>%
 ##   group_by(study_id) %>%
 ##   mutate(last_visit = lag(date_visit_m))
