@@ -1,5 +1,5 @@
 ---
-title: "R + REDCap Example Data Cleaning Workflow"
+title: "Data Cleaning Workflow for Prospective Clinical Research, Using R + REDCap"
 subtitle: "Additional resources on Github: [github.com/jenniferthompson/DataCleanExample](https://github.com/jenniferthompson/DataCleanExample)"
 author: "Jennifer Thompson, MPH"
 date: "June 4, 2018"
