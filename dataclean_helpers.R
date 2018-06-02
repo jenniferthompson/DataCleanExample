@@ -3,6 +3,7 @@
 ################################################################################
 
 library(httr) ## for working with REDCap API
+rc_url <- "https://redcap.med.osaka-cu.ac.jp/redcap/api/" ## change to yours!
 
 ## -- Helper function to create data.frames from `response` objects created ----
 ## -- by httr::POST ------------------------------------------------------------
@@ -23,7 +24,7 @@ post_to_df <- function(post_obj){
 ## -- Read in data dictionary --------------------------------------------------
 ## -- We will use this for variable labels, limits -----------------------------
 ddict_post <- httr::POST(
-  url = "https://redcap.vanderbilt.edu/api/",
+  url = rc_url,
   body = list(
     token = Sys.getenv("RCTOKEN_OCU_ORG"),
       ## API token gives you permission to get data
