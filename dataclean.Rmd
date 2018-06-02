@@ -90,6 +90,8 @@ LDL cholesterol, and weight over time. (Sample database is adapted with thanks
 from REDCap's project templates.) The study codebook is available
 [here](https://github.com/jenniferthompson/DataCleanExample/blob/master/codebook.pdf).
 
+![Example study data collection](images/example_events.png)
+
 \tableofcontents
 
 # Process Overview
@@ -167,7 +169,22 @@ Once data collection is finished, we continue to iterate the data cleaning
 process until there are no more queries from the R script. At that point, you
 should feel free to throw a party.
 
-The rest of this tutorial will focus on the steps of building the R script.
+## Overview of R Script Structure
+
+The rest of this tutorial will focus on the steps of building the R script. In
+general, my process for the script looks like this:
+
+1. Download data from REDCap using the API (Chapter 3)
+1. Do any needed data management
+1. For each form (Chapter 4):
+    1. Set up
+    1. Check for simple missingness (eg, date of birth should always be present in the baseline form)
+    1. Check for data with unlikely values (eg, creatinine that is unexpectedly high or low)
+    1. Other, more complicated checks
+1. Combine issues from all forms into a single data.frame
+1. Remove issues that were previously documented as "unfixable" or correct in
+the documentation database (Chapter 5)
+1. Prepare issues to disseminate to study staff (Chapter 6)
 
 # Step 1: Use REDCap API to Export Raw Data
 
@@ -177,15 +194,7 @@ manually exporting every time data is cleaned.
 
 ## Requirements:
 
-### 1. Your API URL
-
-This tells R what REDCap instance to connect to. It will look something like this:
-
-`https://redcap.vanderbilt.edu/api/`
-
-`https://redcap.med.osaka-cu.ac.jp/redcap/api/`
-
-### 2. Working API token
+### 1. Working API token
 
 You must have appropriate user rights for your database in order to request an
 API token. Once you have the correct user rights, log into the REDCap project.
@@ -215,6 +224,20 @@ example includes basic API usage and will not use the package, but if you are
 interested in using more of the API's functionality, it could be a good package
 to investigate.)*
 
+### 2. Your API URL
+
+This tells R what REDCap instance to connect to. It will look something like this:
+
+`https://redcap.vanderbilt.edu/api/`
+
+`https://redcap.med.osaka-cu.ac.jp/redcap/api/`
+
+If you don't know your API URL, you can find it this way once you have your API token (thank you to [Benjamin Nutter, author of the redcapAPI package!](https://github.com/nutterb/redcapAPI/wiki/Finding-your-REDCap-API-URL)):
+
+1. Go to the API documentation of a project for which you have a working API token
+1. Choose an option under "Supported Actions," such as "Export Records"
+1. The URL will appear on the next page
+
 ### 3. R's `httr` package, built for working with APIs
 
 More information on `httr` can be found in the documentation and vignettes,
@@ -225,17 +248,20 @@ this tutorial is intentionally in base R.)
 
 There are (at least) two approaches to exporting REDCap data:
 
-1. Read in the entire database in a single `httr::POST` call, then create subsets in R as needed
-1. Read in specific subsets in separate calls
+1. Read in the entire database in a single, relatively simple `httr::POST` call,
+then create subsets in R as needed
+1. Read in specific subsets in separate, more complex `httr::POST` calls
 
 Approach #1 is fine if your database is not longitudinal, complex, or very
-large, and/or if you are not yet comfortable working with the API. Approach #2 is valuable in more complicated situations.
+large, and/or if you are not yet very comfortable working with the API. Approach #2 is valuable in more complicated situations.
 
 For example, here, our database is longitudinal, and different data is
-collected at different time points (for example, date of birth is only
-collected at baseline). If we read in the entire database at once, we will have
-a lot of missing values (for example, date of birth will be missing at each
-monthly visit and study completion, unless we proactively subset the data).
+collected at different time points. If we read in the entire database at once,
+we will have a lot of missing values - for example, date of birth will be
+missing in each row representing monthly visits and study completion. We can
+fairly easily create subsets of the data for each event, but it can be annoying
+to subset only the *columns* needed for each event, either manually or using the
+data dictionary.
 
 I will show both approaches for reference, but I primarily use Approach 2.
 Either way, we want to create the following datasets:
@@ -280,6 +306,8 @@ main_post <- httr::POST(
 )
 
 ## main_post has class "response"; read it as a CSV to create a data.frame
+## post_to_df() is mostly a wrapper for read.csv() with our preferred options;
+##  it also removes repeated underscores from variable names
 main_df <- post_to_df(main_post)
 
 ## Create subsets with data collected at various time points
@@ -290,10 +318,11 @@ completion_df <- subset(main_df, redcap_event_name == "Study Completion")
 ```
 
 Note that unless we spend the time to manually subset them, each of those three
-data.frames will have many columns with blank values. For example,
-`baseline_df` will have a column for `compliance`, even though `compliance` is
-only collected at monthly visits. This is not a major problem if your project
-is small, but can be a problem if you have a large project.
+data.frames will have many columns with blank values, because our study is
+longitudinal (can have multiple events with different data collected at each).
+For example, `baseline_df` will have a column for `compliance`, even though
+`compliance` is only collected at monthly visits. This is not a major problem if
+your project is small, but can be a problem if you have a large project.
 
 ### Approach 2
 
@@ -301,9 +330,9 @@ This approach uses three separate `httr::POST` calls to create separate
 datasets that are exactly what we need.
 
 REDCap's API Playground can be useful in figuring out which options to include
-in the `body` argument of `httr::POST`. (Note that as of the time of this writing, the example R code from the Playground uses `RCurl`; `httr` is
-currently more commonly used and thus it is easier to find documentation and
-assistance for it.)
+in the `body` argument of `httr::POST`. *(Note that as of the time of this writing, the example R code from the Playground uses `RCurl`; `httr` is
+currently more commonly used, and thus it is easier to find documentation and
+assistance for it, so I have used it here.)*
 
 Differences from Approach 1 in the `body` of `httr::POST`:
 
@@ -313,12 +342,16 @@ Differences from Approach 1 in the `body` of `httr::POST`:
 
 If you are exporting >1 form or event, separate them with commas. You can find
 raw event names by going to `Project Setup -> Define My Events` within your
-REDCap project, and raw form names by looking at the data dictionary. (They can
-also be exported as project metadata using the API; there is an example in
-`dataclean_helpers.R`.)
+REDCap project, and raw form names by either looking at the data dictionary or downloading the instrument mappings from `Project Setup -> Designate Instruments
+for My Events`. (They can also be exported as project metadata using the API;
+there is an example in `dataclean_helpers.R`.)
 
-**Note:** The function `post_to_df()`, which creates a data.frame from the
-result of `httr::POST`, is created in `dataclean_helpers.R`.
+**Note:** The helper function `post_to_df()`, which creates a data.frame from
+the result of `httr::POST`, is created in `dataclean_helpers.R`. It has two
+steps:
+
+1. Read in a `POST` object as a CSV, with our preferred options for `read.csv()`.
+1. Remove repeated `_` characters from variable names.
 
 #### Baseline and Demographic Data
 
@@ -360,7 +393,7 @@ codes - for example, if you have fields with very long labels.
 #### Monthly Visit Data
 
 This code chunk exports all the fields collected at each monthly visit (the
-Monthly Visit form), as well as study ID. It exports all three monthly visit events; all other events will have `NA` values for these fields. Each study ID
+Monthly Visit form), as well as study ID. It exports all three monthly visit events; all other events would have `NA` values for these fields. Each study ID
 will have up to three records in this dataset.
 
 ```{r monthly_data, eval = FALSE}
@@ -449,28 +482,30 @@ completion_df <- read.csv(
 This sounds deceptively straightforward, but is the most involved part of this
 process. Our goal is to create a single data frame of all potential problems in
 our REDCap project as of the date we run the script, which can then be imported
-into our documentation database(s) (more on that later) so that the issues can
-be resolved.
+into our documentation database(s) (see Chapter 6) so that the issues can be
+resolved.
 
 ## Workflow
 
 Typically, I work form by form: here, we'll clean the entire demographic form,
 then the entire baseline data collection form, then... This keeps the code in
-manageable chunks and makes it easier to both write initially and debug and
+manageable chunks, and makes it easier to both write initially and debug and
 maintain as the study progresses.
 
-We often have groups of very similar potential problems: There are many fields that should be present no matter what, for example, and there are several
-fields which should be between specific limits. We can write custom functions
-to check these types of issues.
+We often have groups of very similar potential problems: There are many fields that should be present no matter what, and there are several fields which should
+be between specific limits. I have written helper functions that check for these
+specific types of issues; they are in `dataclean_helpers.R`, and we'll see their
+use later.
 
-Remember: REDCap has many data validation capabilities built in - **use them!**
-If your database already checks fields like email for formatting, or gives live
-warning if you enter unlikely lab values, it will save you and the study staff
-time and headaches later. The same applies to using branching logic often and
-well. The added value for this data cleaning script comes from the more complex
-data checks that are possible here and not within REDCap itself. But the more
-of REDCap's powerful features you can use from the beginning, the better your
-data will be throughout the study (eg, for DSMB reports and interim analyses).
+**Remember**: REDCap has many data validation capabilities built in - **use
+them!** If your database already checks fields like email for formatting, or
+gives live warnings if you enter unlikely lab values, it will save you and the
+study staff time and headaches later. The same applies to using branching logic
+often and well. The added value for this data cleaning script comes from the
+more complex data checks that are possible here and not within REDCap itself.
+But the more of REDCap's powerful features you can use from the beginning, the
+better your data will be throughout the study (eg, for DSMB reports and interim
+analyses).
 
 \newpage
 
@@ -652,8 +687,8 @@ you subset the data to only keep the `Baseline Visit` event.
 The first step is to determine what issues need to be looked for. Some of these
 are straightforward: for example, every patient should have a date of birth.
 Some are more complex or not as obvious, however. **This is where communication
-and detail are key.** Typically, our project manager will spend a good deal of
-time creating a list of things that need to be checked, based on the study
+and detail are key.** Typically, our clinical project manager will spend a lot
+of time creating a list of things that need to be checked, based on the study
 protocols and goals. It is enormously important for the clinical data team and
 the statistician/database manager to overcommunicate at this stage!
 
@@ -810,6 +845,8 @@ demog_errors
 
 ```
 
+![How `create_error_df()` works](images/create_error_df.png)
+
 ### 3. Simple checks: Are these fields present?
 
 One of the most common issues we check is simply whether every record has a
@@ -825,10 +862,11 @@ labels to create the full error message.
 
 (Variable labels can be very helpful in error messages! No matter how
 descriptive your field names are, your data entry team is used to seeing
-"Subject Global Assessment," not "sga_b". With little effort, you can make their
-lives much easier and also make the data cleaning process much faster. Here, the
-data dictonary is imported in `dataclean_helpers.R`, using a process similar to
-the one we used to download our raw data, and stored as the object `datadict`.)
+"Subject Global Assessment," not "sga_b". With little effort, you can use the
+data dictionary to make their lives much easier and also make the data cleaning
+process much faster. Here, the data dictonary is imported in
+`dataclean_helpers.R`, using a process similar to the one we used to download
+our raw data, and stored as the object `datadict`.)
 
 ```{r demog_missing}
 demog_missing <- check_missing(
