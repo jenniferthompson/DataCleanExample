@@ -791,7 +791,14 @@ all_issues <- subset(
 #' **remove** issues which are unfixable or correct from future data cleans.
 #' Note that since the documentation is a separate REDCap project, you will need
 #' a separate API token. Mine is saved in my `.Renviron` file as `DOCTOKEN`.
-#'
+
+## -- TUTORIAL NOTE: STOP HERE -------------------------------------------------
+## Run dataclean_partial.R (or dataclean_partial_ocu.R if you are working with
+## OCU's REDCap + API token); this will get you to the same place, but with
+## the "corrected" data in your environment
+
+## source("tutorialscripts/dataclean_partial_ocu.R")
+
 ## ----already_checked, eval = FALSE---------------------------------------
 ## Documentation of queries already checked
 doc_post <- httr::POST(
