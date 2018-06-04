@@ -50,5 +50,5 @@ instance:
     - `codebook_documentation.pdf`: for documentation database
 
 These materials were originally developed for a workshop series at Osaka City
-University, Osaka, Japan, June 2018. They are public under an [MIT
+University, Osaka, Japan, June 2018. They are under an [MIT
 license](LICENSE).
