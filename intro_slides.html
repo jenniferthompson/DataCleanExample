@@ -31,7 +31,7 @@ Please tell me if I need to speak more slowly or repeat something!
 
 class: inverse, middle
 
-# Workshop Information
+# Workshop Preparation
 
 ---
 
@@ -53,6 +53,20 @@ Your printed PDF will have everything you need for reference, but if you want to
 I suggest having `dataclean_script.R` open to follow along. This script (and the tutorial) source `dataclean_helpers.R`, which we will go over in detail if we have time.
 
 We will use `dataclean_partial_ocu.R` once during the workshop.
+
+---
+
+# Set Up `.Renviron`
+
+This should allow us to all use the same code, even though we have different API tokens.
+
+1. Go to working directory for tutorial
+1. `file.edit(".Renviron")`
+1. Three lines:
+    1. `RCTOKEN_OCU_ORG=[your token, "Original Data"]`
+    1. `RCTOKEN_OCU_CORR=[your token, "Corrected Data"]`
+    1. `DOCTOKEN_OCU=[your token, "Documentation"]`
+1. Restart R/RStudio in the same working directory
 
 ---
 
@@ -80,15 +94,18 @@ class: inverse, middle
 - Clinical trials, prospective cohort studies, retrospective EMR studies
 - Most have data collected in the hospital and during long-term follow-up (several years!)
 - Currently have at least six studies in data collection phase, with one just finished
+- For a given study:
+    - I typically communicate with 1-2 clinical project managers/coordinators in charge
+    - Those PMs/coordinators communicate with other clinical data team members, either at VUMC or at other study sites
 
 ---
 
 # Our Previous Data Cleaning Methods
 
-- Pre-2008: 🤷🏻
+- Pre-2008: 🤷🏻- data collected before I arrived, anything we found addressed in an ad hoc manner
 - BRAIN-ICU (finished data collection ~2011):
-    - R script for in-hospital data, but very manual process
-    - Google Docs for follow-up data
+    - In-hospital data: R script to find issues, but documentation was very manual process
+    - Follow-up data: Google Docs; limited because we can't include PHI, got confusing
 - MIND-USA (begin enrolling 2011): This process!
 
 ---
