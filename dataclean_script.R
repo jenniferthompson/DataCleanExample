@@ -79,7 +79,7 @@ rc_url <- "https://redcap.med.osaka-cu.ac.jp/redcap/api/"
 baseline_post <- httr::POST(
   url = rc_url,
   body = list(
-    token = Sys.getenv("RCTOKEN"), ## API token gives you permission
+    token = Sys.getenv("RCTOKEN_OCU_ORG"), ## API token gives you permission
     content = "record",            ## export *records*
     format = "csv",                ## export as *CSV*
     forms = "demographics,baseline_data", ## forms
@@ -108,7 +108,7 @@ baseline_df <- post_to_df(baseline_post)
 monthly_post <- httr::POST(
   url = rc_url,
   body = list(
-    token = Sys.getenv("RCTOKEN"),           ## API token gives you permission
+    token = Sys.getenv("RCTOKEN_OCU_ORG"),   ## API token gives you permission
     content = "record",                      ## export *records*
     format = "csv",                          ## export as *CSV*
     forms = "monthly_data",                  ## forms
@@ -129,12 +129,12 @@ monthly_df <- post_to_df(monthly_post)
 completion_post <- httr::POST(
   url = rc_url,
   body = list(
-    token = Sys.getenv("RCTOKEN"),     ## API token gives you permission
-    content = "record",                ## export *records*
-    format = "csv",                    ## export as *CSV*
-    forms = "completion_data",         ## form
-    fields = c("study_id"),            ## additional fields
-    events = "study_completion_arm_1", ## study completion event
+    token = Sys.getenv("RCTOKEN_OCU_ORG"), ## API token gives you permission
+    content = "record",                    ## export *records*
+    format = "csv",                        ## export as *CSV*
+    forms = "completion_data",             ## form
+    fields = c("study_id"),                ## additional fields
+    events = "study_completion_arm_1",     ## study completion event
     rawOrLabel = "label",      ## export factor *labels* vs numeric codes
     exportCheckboxLabel = TRUE ## export ckbox *labels* vs Unchecked/Checked
   )
