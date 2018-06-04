@@ -848,3 +848,22 @@ write.csv(
 
 #' From here, you're ready to upload the new round of queries to your
 #' documentation database and begin the process again. Happy cleaning!
+
+## -- Demonstration: Add study site to issues, create separate CSVs for each ---
+upload_issues$site <- with(upload_issues, {
+  factor(
+    ifelse(study_id %in% c("1", "2"), 1, 2),
+    levels = 1:2, labels = c("OCU", "VUMC")
+  )
+})
+
+lapply(
+  unique(upload_issues$site),
+  FUN = function(x){
+    write.csv(subset(upload_issues,
+                     site == x,
+                     select = c(queryid, study_id, date_query, form, event, msg)),
+              file = sprintf("dataclean_%s_%s.csv", x, Sys.Date()),
+              row.names = FALSE)
+  }
+)
