@@ -181,3 +181,16 @@ class: inverse, middle, center
 --
 
 Now, to the PDF!
+
+![](images/adventure.gif)
+
+---
+
+class: center, inverse
+
+![Data cleaning timeline](images/dataclean_timeline.png)
+---
+
+class: center, inverse
+
+![Iteration process](images/dataclean_iteration.png)
